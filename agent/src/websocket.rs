@@ -147,8 +147,12 @@ fn build_full_snapshot(state: &crate::state::HelmState) -> Vec<String> {
 }
 
 fn build_update_messages(state: &crate::state::HelmState) -> Vec<String> {
-    // In future: diff against previous state and send only changes.
-    // For now: send all state (collectors set only changed fields via Option).
+    // NOTE: This is a full-snapshot stand-in. The delta wire contract (send only
+    // changed fields) is not yet implemented — true diffing requires storing the
+    // previous snapshot and comparing field-by-field. Collectors express deltas
+    // by setting only changed Option fields, but the broadcaster re-sends all
+    // currently-set fields on every tick. This is correct but over-sends.
+    // Implement per-field diffing before optimizing for bandwidth.
     build_full_snapshot(state)
 }
 

@@ -1,10 +1,13 @@
 //! Wire protocol types for the HELM agent.
 //!
-//! These structs mirror the JSON schemas in `protocol/schema/`. Every message
-//! is serialized inside an [`Envelope`] (`{ "type", "ts", "payload" }`).
+//! These structs mirror the JSON schemas in `protocol/schema/`.
+//! Outbound serialization uses `websocket::make_envelope` + `serde_json::json!`.
+//! `HelmMessage` is used for inbound deserialization (Android → agent commands).
 
 use serde::{Deserialize, Serialize};
 
+/// Inbound message envelope — used to deserialize messages arriving from Android.
+/// Outbound messages are serialized via `websocket::make_envelope`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum HelmMessage {
@@ -19,15 +22,6 @@ pub enum HelmMessage {
     CommandAck(CommandAck),
     Ping,
     Pong,
-}
-
-/// Outer wrapper for every WebSocket message.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Envelope {
-    #[serde(rename = "type")]
-    pub msg_type: String,
-    pub ts: i64,
-    pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
