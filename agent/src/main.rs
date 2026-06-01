@@ -56,6 +56,12 @@ async fn main() -> Result<()> {
     tokio::spawn(battery::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(process::run(state.clone(), state_tx.clone(), cfg.clone()));
 
+    // Spawn dev-environment collectors.
+    tokio::spawn(workspace::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(git::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(window::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
+
     let addr: SocketAddr = format!("0.0.0.0:{}", cfg.port).parse()?;
 
     // Graceful shutdown on SIGINT or SIGTERM.
