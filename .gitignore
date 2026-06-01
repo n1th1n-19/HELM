@@ -1,0 +1,51 @@
+# Rust
+target/
+# Cargo.lock is kept for libraries, ignored for binaries
+# Uncomment if this repo contains only library crates:
+# Cargo.lock
+
+# Android
+build/
+.gradle/
+*.apk
+*.aab
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+*.keystore
+*.jks
+
+# Node / misc
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+*.swp
+*.swo
+*~
+.idea/
+
+# Git worktrees
+.worktrees/
+worktrees/
+
+# Misc
+*.log
+*.tmp
+dist/
+out/
