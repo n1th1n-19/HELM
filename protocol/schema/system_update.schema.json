@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "system_update.schema.json",
+  "title": "SystemUpdate",
+  "description": "System metrics payload. Sent every 1-2 s. First message is a full snapshot; subsequent messages are deltas (only changed fields present).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "cpu_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Aggregate CPU utilization percentage"
+    },
+    "cpu_freq_mhz": {
+      "type": "number",
+      "description": "Current CPU frequency in MHz"
+    },
+    "cpu_temp_c": {
+      "type": ["number", "null"],
+      "description": "CPU temperature in Celsius; null if not available"
+    },
+    "ram_used_mb": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "RAM currently in use, in mebibytes"
+    },
+    "ram_total_mb": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total installed RAM in mebibytes"
+    },
+    "swap_used_mb": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Swap space currently in use, in mebibytes"
+    },
+    "swap_total_mb": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total swap space in mebibytes"
+    },
+    "net_up_bps": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Network upload throughput in bytes per second"
+    },
+    "net_down_bps": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Network download throughput in bytes per second"
+    },
+    "disk_read_bps": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Disk read throughput in bytes per second"
+    },
+    "disk_write_bps": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Disk write throughput in bytes per second"
+    },
+    "battery_percent": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Battery charge percentage; null if no battery present"
+    },
+    "battery_charging": {
+      "type": ["boolean", "null"],
+      "description": "Whether the battery is currently charging; null if no battery present"
+    },
+    "uptime_secs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "System uptime in seconds"
+    }
+  }
+}

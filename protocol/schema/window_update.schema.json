@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "window_update.schema.json",
+  "title": "WindowUpdate",
+  "description": "Active window and workspace state. Delta model — only changed fields are sent after the initial snapshot. All fields may be null on Wayland where window detection is unavailable.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "app_name": {
+      "type": ["string", "null"],
+      "description": "Name of the application owning the active window; null on Wayland or when unavailable"
+    },
+    "window_title": {
+      "type": ["string", "null"],
+      "description": "Title of the active window; null on Wayland or when unavailable"
+    },
+    "workspace_name": {
+      "type": ["string", "null"],
+      "description": "Name of the current virtual workspace/desktop; null when unavailable"
+    },
+    "workspace_num": {
+      "type": ["integer", "null"],
+      "description": "Index of the current virtual workspace (typically 1-based); null when unavailable"
+    }
+  }
+}

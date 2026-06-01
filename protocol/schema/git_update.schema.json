@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "git_update.schema.json",
+  "title": "GitUpdate",
+  "description": "Git repository state payload. Delta model — only changed fields are sent after the initial snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "repo_name": {
+      "type": ["string", "null"],
+      "description": "Repository name derived from the directory; null when no repo is active"
+    },
+    "repo_path": {
+      "type": ["string", "null"],
+      "description": "Absolute path to the repository root; null when no repo is active"
+    },
+    "branch": {
+      "type": ["string", "null"],
+      "description": "Current local branch name; null in detached HEAD state or when no repo active"
+    },
+    "remote_branch": {
+      "type": ["string", "null"],
+      "description": "Upstream tracking branch (e.g. 'origin/main'); null if not configured"
+    },
+    "ahead": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of local commits ahead of the upstream"
+    },
+    "behind": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of upstream commits the local branch is behind"
+    },
+    "modified": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of modified (unstaged) tracked files"
+    },
+    "staged": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of files staged for the next commit"
+    },
+    "deleted": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of deleted tracked files"
+    },
+    "untracked": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of untracked files"
+    },
+    "commits": {
+      "type": "array",
+      "description": "Recent commits on the current branch, newest first; maximum 10 entries",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["hash", "message", "author", "ts"],
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "type": "string",
+            "minLength": 7,
+            "maxLength": 7,
+            "description": "Abbreviated 7-character commit SHA"
+          },
+          "message": {
+            "type": "string",
+            "description": "Commit subject line"
+          },
+          "author": {
+            "type": "string",
+            "description": "Commit author name"
+          },
+          "ts": {
+            "type": "integer",
+            "description": "Commit author timestamp in Unix milliseconds"
+          }
+        }
+      }
+    }
+  }
+}

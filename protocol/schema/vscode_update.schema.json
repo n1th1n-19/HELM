@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "vscode_update.schema.json",
+  "title": "VscodeUpdate",
+  "description": "VS Code workspace detection payload. Delta model — only changed fields are sent after the initial snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "workspace_path": {
+      "type": ["string", "null"],
+      "description": "Absolute path to the open workspace or folder root; null when VS Code is not running or no folder is open"
+    },
+    "project_name": {
+      "type": ["string", "null"],
+      "description": "Derived project name (typically the workspace folder's basename); null when unavailable"
+    },
+    "active_file": {
+      "type": ["string", "null"],
+      "description": "Absolute path to the currently focused editor file; null when no file is active"
+    },
+    "branch": {
+      "type": ["string", "null"],
+      "description": "Current git branch of the VS Code workspace; null when not in a git repo or unavailable"
+    }
+  }
+}

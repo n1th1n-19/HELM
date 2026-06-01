@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "music_update.schema.json",
+  "title": "MusicUpdate",
+  "description": "Music/media player state via MPRIS2. Delta model — only changed fields are sent after the initial snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "player": {
+      "type": ["string", "null"],
+      "description": "Player application name (e.g. 'Spotify', 'mpv', 'Rhythmbox'); null when no player active"
+    },
+    "title": {
+      "type": ["string", "null"],
+      "description": "Track title; null when unavailable"
+    },
+    "artist": {
+      "type": ["string", "null"],
+      "description": "Track artist; null when unavailable"
+    },
+    "album": {
+      "type": ["string", "null"],
+      "description": "Album name; null when unavailable"
+    },
+    "album_art_b64": {
+      "type": ["string", "null"],
+      "description": "Base64-encoded PNG album art, 200x200 pixels; null when unavailable"
+    },
+    "duration_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Track duration in milliseconds; null when unavailable"
+    },
+    "position_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Current playback position in milliseconds; null when unavailable"
+    },
+    "volume": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Playback volume as a value from 0.0 (silent) to 1.0 (full); null when unavailable"
+    },
+    "state": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["Playing", "Paused", "Stopped"]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Current playback state; null when no player is active"
+    }
+  }
+}

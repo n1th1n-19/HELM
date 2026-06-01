@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "process_update.schema.json",
+  "title": "ProcessUpdate",
+  "description": "Top processes by CPU utilization. Always a full list — not a delta.",
+  "type": "object",
+  "required": ["processes"],
+  "additionalProperties": false,
+  "properties": {
+    "processes": {
+      "type": "array",
+      "description": "Top processes sorted by cpu_percent descending; maximum 10 entries",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["pid", "name", "cpu_percent", "mem_mb"],
+        "additionalProperties": false,
+        "properties": {
+          "pid": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Process ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Process name (executable basename)"
+          },
+          "cpu_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "CPU utilization percentage"
+          },
+          "mem_mb": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Resident memory usage in mebibytes"
+          }
+        }
+      }
+    }
+  }
+}

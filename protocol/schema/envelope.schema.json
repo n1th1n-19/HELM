@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "envelope.schema.json",
+  "title": "Envelope",
+  "description": "Outer wrapper for every HELM WebSocket message",
+  "type": "object",
+  "required": ["type", "ts", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "system_update",
+        "git_update",
+        "music_update",
+        "window_update",
+        "vscode_update",
+        "process_update",
+        "system_info",
+        "command",
+        "command_ack",
+        "ping",
+        "pong"
+      ],
+      "description": "Discriminates the payload type"
+    },
+    "ts": {
+      "type": "integer",
+      "description": "Unix timestamp in milliseconds when the message was created"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Message-specific payload; see individual schema files for each type"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "system_info.schema.json",
+  "title": "SystemInfo",
+  "description": "Static system information. Sent once immediately on connection. Not a delta — always a full object.",
+  "type": "object",
+  "required": ["os", "kernel", "hostname"],
+  "additionalProperties": false,
+  "properties": {
+    "os": {
+      "type": "string",
+      "description": "Operating system name and version (e.g. 'Arch Linux', 'Ubuntu 24.04')"
+    },
+    "kernel": {
+      "type": "string",
+      "description": "Kernel version string (e.g. '6.9.3-arch1-1')"
+    },
+    "hostname": {
+      "type": "string",
+      "description": "Machine hostname"
+    },
+    "de": {
+      "type": ["string", "null"],
+      "description": "Desktop environment name (e.g. 'KDE Plasma', 'GNOME', 'Hyprland'); null when not detectable"
+    },
+    "shell": {
+      "type": ["string", "null"],
+      "description": "Default login shell (e.g. 'bash', 'zsh', 'fish'); null when not detectable"
+    },
+    "resolution": {
+      "type": ["string", "null"],
+      "description": "Primary display resolution (e.g. '2560x1440'); null when not detectable"
+    },
+    "agent_version": {
+      "type": "string",
+      "description": "HELM agent version string (semver, e.g. '0.1.0')"
+    }
+  }
+}
