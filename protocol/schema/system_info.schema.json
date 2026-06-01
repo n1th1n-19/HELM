@@ -4,7 +4,7 @@
   "title": "SystemInfo",
   "description": "Static system information. Sent once immediately on connection. Not a delta — always a full object.",
   "type": "object",
-  "required": ["os", "kernel", "hostname"],
+  "required": ["os", "kernel", "hostname", "agent_version"],
   "additionalProperties": false,
   "properties": {
     "os": {

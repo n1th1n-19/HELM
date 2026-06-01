@@ -23,36 +23,36 @@
       "description": "Upstream tracking branch (e.g. 'origin/main'); null if not configured"
     },
     "ahead": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
       "default": 0,
-      "description": "Number of local commits ahead of the upstream"
+      "description": "Number of local commits ahead of the upstream; null when no repo is active"
     },
     "behind": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
       "default": 0,
-      "description": "Number of upstream commits the local branch is behind"
+      "description": "Number of upstream commits the local branch is behind; null when no repo is active"
     },
     "modified": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Count of modified (unstaged) tracked files"
+      "description": "Count of modified (unstaged) tracked files; null when no repo is active"
     },
     "staged": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Count of files staged for the next commit"
+      "description": "Count of files staged for the next commit; null when no repo is active"
     },
     "deleted": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Count of deleted tracked files"
+      "description": "Count of deleted tracked files; null when no repo is active"
     },
     "untracked": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Count of untracked files"
+      "description": "Count of untracked files; null when no repo is active"
     },
     "commits": {
       "type": "array",
@@ -66,8 +66,8 @@
           "hash": {
             "type": "string",
             "minLength": 7,
-            "maxLength": 7,
-            "description": "Abbreviated 7-character commit SHA"
+            "pattern": "^[0-9a-f]{7,}$",
+            "description": "Abbreviated commit SHA (minimum 7 hex characters; longer for repos where 7 chars is not unique)"
           },
           "message": {
             "type": "string",

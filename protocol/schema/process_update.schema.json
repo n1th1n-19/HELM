@@ -29,7 +29,7 @@
             "type": "number",
             "minimum": 0,
             "maximum": 100,
-            "description": "CPU utilization percentage"
+            "description": "CPU utilization percentage, normalized to 0–100 against total system capacity (sum of all cores)"
           },
           "mem_mb": {
             "type": "number",

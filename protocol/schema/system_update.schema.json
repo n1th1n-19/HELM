@@ -13,8 +13,9 @@
       "description": "Aggregate CPU utilization percentage"
     },
     "cpu_freq_mhz": {
-      "type": "number",
-      "description": "Current CPU frequency in MHz"
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Current CPU frequency in MHz; null if not detectable (some VMs/containers)"
     },
     "cpu_temp_c": {
       "type": ["number", "null"],

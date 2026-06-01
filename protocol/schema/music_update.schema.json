@@ -43,15 +43,7 @@
       "description": "Playback volume as a value from 0.0 (silent) to 1.0 (full); null when unavailable"
     },
     "state": {
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": ["Playing", "Paused", "Stopped"]
-        },
-        {
-          "type": "null"
-        }
-      ],
+      "enum": ["Playing", "Paused", "Stopped", null],
       "description": "Current playback state; null when no player is active"
     }
   }
