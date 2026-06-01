@@ -46,6 +46,16 @@ async fn main() -> Result<()> {
     // Notify initial state.
     let _ = state_tx.send(());
 
+    // Spawn system collectors. Each gets its own sysinfo instance to avoid
+    // lock contention between collectors with different poll intervals.
+    tokio::spawn(cpu::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(memory::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(temperature::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(network::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(disk::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(battery::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(process::run(state.clone(), state_tx.clone(), cfg.clone()));
+
     let addr: SocketAddr = format!("0.0.0.0:{}", cfg.port).parse()?;
 
     // Graceful shutdown on SIGINT or SIGTERM.
