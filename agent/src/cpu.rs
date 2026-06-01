@@ -29,6 +29,8 @@ pub async fn run(state: SharedState, tx: StateTx, cfg: HelmConfig) {
     ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     let mut sys = System::new();
+    // Prime: first sysinfo CPU read is always 0%; discard it.
+    sys.refresh_cpu_all();
 
     loop {
         ticker.tick().await;

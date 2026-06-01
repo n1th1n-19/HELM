@@ -17,7 +17,10 @@ fn find_cpu_temp(components: &Components) -> Option<f64> {
                 || label.contains("tdie")
                 || label.contains("tctl")
         })
-        .map(|c| c.temperature() as f64)
+        .and_then(|c| {
+            let t = c.temperature() as f64;
+            if t.is_finite() && t > 0.0 { Some(t) } else { None }
+        })
 }
 
 pub async fn run(state: SharedState, tx: StateTx, cfg: HelmConfig) {
