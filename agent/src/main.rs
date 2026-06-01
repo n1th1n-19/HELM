@@ -48,9 +48,14 @@ async fn main() -> Result<()> {
 
     let addr: SocketAddr = format!("0.0.0.0:{}", cfg.port).parse()?;
 
-    // Graceful shutdown on SIGINT.
+    // Graceful shutdown on SIGINT or SIGTERM.
     let shutdown = async {
-        tokio::signal::ctrl_c().await.ok();
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut sigterm = signal(SignalKind::terminate()).expect("failed to register SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = sigterm.recv() => {}
+        }
         info!("Shutting down HELM agent");
     };
 
