@@ -38,7 +38,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
-.idea/
 
 # Git worktrees
 .worktrees/
