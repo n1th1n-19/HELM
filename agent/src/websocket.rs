@@ -106,9 +106,15 @@ async fn handle_connection(
         }
         Some(ctx) => {
             // WiFi mode: TLS first, then PSK token check during WS upgrade.
-            let acceptor = tokio_rustls::TlsAcceptor::from(Arc::clone(&ctx.tls_config));
-            let tls_stream = acceptor.accept(stream).await?;
             let ip = peer_addr.ip();
+            let acceptor = tokio_rustls::TlsAcceptor::from(Arc::clone(&ctx.tls_config));
+            let tls_stream = match acceptor.accept(stream).await {
+                Ok(s) => s,
+                Err(e) => {
+                    rate_limiter.record_failure(ip);
+                    return Err(e.into());
+                }
+            };
             let token = ctx.token.clone();
             let rl = rate_limiter.clone();
             let ws = tokio_tungstenite::accept_hdr_async(
@@ -120,7 +126,8 @@ async fn handle_connection(
                         .get("X-Helm-Token")
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("");
-                    if provided != token {
+                    use subtle::ConstantTimeEq;
+                    if provided.as_bytes().ct_eq(token.as_bytes()).unwrap_u8() != 1 {
                         rl.record_failure(ip);
                         return Err(
                             tokio_tungstenite::tungstenite::http::Response::builder()

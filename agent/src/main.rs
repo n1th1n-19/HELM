@@ -148,7 +148,11 @@ async fn main() -> Result<()> {
                     warn!("Failed to print QR code: {e}");
                 }
                 println!("{pairing_url}\n");
-                info!("WiFi pairing URL: {pairing_url}");
+                info!(
+                    "WiFi pairing URL: helms://{}:{}?cert={}",
+                    lan_ip, cfg.port, ctx.cert_fingerprint
+                );
+                tracing::debug!("WiFi pairing URL (full): {pairing_url}");
             } else {
                 warn!("WiFi mode: could not detect LAN IP — enter agent IP manually in the app");
             }

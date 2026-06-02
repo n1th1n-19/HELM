@@ -84,8 +84,16 @@ pub fn load_or_create(_cfg: &crate::config::HelmConfig) -> Result<SecurityContex
         info!("Generating PSK token for WiFi mode");
         let bytes = rand::random::<[u8; 32]>();
         let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-        std::fs::write(token_path(), &hex)
-            .with_context(|| format!("writing {}", token_path().display()))?;
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .write(true).create(true).truncate(true)
+                .mode(0o600)
+                .open(token_path())
+                .and_then(|mut f| f.write_all(hex.as_bytes()))
+                .with_context(|| format!("writing {}", token_path().display()))?;
+        }
         hex
     };
 

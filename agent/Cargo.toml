@@ -43,6 +43,7 @@ tokio-rustls = "0.26"
 rustls-pemfile = "2"
 rand = { version = "0.8", features = ["getrandom"] }
 sha2 = "0.10"
+subtle = "2"
 
 # System tray (optional, see [features])
 tray-icon = { version = "0.17", optional = true }
