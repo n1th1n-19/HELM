@@ -1,5 +1,6 @@
 package dev.helm.app.data.repository
 
+import dev.helm.app.data.model.ClaudeUpdate
 import dev.helm.app.data.model.CommandAck
 import dev.helm.app.data.model.GitUpdate
 import dev.helm.app.data.model.HelmCommand
@@ -94,6 +95,10 @@ class HelmRepository @Inject constructor(
                     val info = json.decodeFromJsonElement<SystemInfo>(envelope.payload)
                     current.copy(systemInfo = info)
                 }
+                "claude_update" -> {
+                    val delta = json.decodeFromJsonElement<ClaudeUpdate>(envelope.payload)
+                    current.copy(claude = current.claude.merge(delta))
+                }
                 "command_ack" -> {
                     val ack = json.decodeFromJsonElement<CommandAck>(envelope.payload)
                     // Cap at 50 entries to prevent unbounded growth.
@@ -168,4 +173,14 @@ fun VscodeUpdate.merge(delta: VscodeUpdate) = VscodeUpdate(
     projectName = delta.projectName ?: projectName,
     activeFile = delta.activeFile ?: activeFile,
     branch = delta.branch ?: branch,
+)
+
+fun ClaudeUpdate.merge(delta: ClaudeUpdate) = ClaudeUpdate(
+    status = delta.status ?: status,
+    task = delta.task ?: task,
+    currentFile = delta.currentFile ?: currentFile,
+    sessionDurationSecs = delta.sessionDurationSecs ?: sessionDurationSecs,
+    tokensUsed = delta.tokensUsed ?: tokensUsed,
+    tokensMax = delta.tokensMax ?: tokensMax,
+    contextPercent = delta.contextPercent ?: contextPercent,
 )

@@ -10,6 +10,14 @@ import androidx.compose.ui.unit.sp
 // To bundle Inter locally, add TTF files to res/font/ and use Font(R.font.inter_*).
 val InterFontFamily = FontFamily.Default
 
+// JetBrains Mono: used for all numeric data (CPU%, memory, tokens, git hashes, network metrics).
+// Bundle JetBrainsMono-*.ttf in res/font/ to activate the real font.
+val JetBrainsMonoFontFamily = FontFamily.Monospace
+
+val HelmMonoLarge  = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+val HelmMonoMedium = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = 14.sp, fontWeight = FontWeight.Normal)
+val HelmMonoSmall  = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp, fontWeight = FontWeight.Normal)
+
 val HelmTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = InterFontFamily,
