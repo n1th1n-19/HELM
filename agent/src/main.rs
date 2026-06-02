@@ -1,3 +1,4 @@
+mod adb;
 mod cli;
 mod config;
 mod mdns;
@@ -104,8 +105,10 @@ async fn main() -> Result<()> {
     tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(claude::run(state.clone(), state_tx.clone(), cfg.clone()));
 
-    // WiFi mode: print pairing QR code and start mDNS advertisement.
+    // Keep adb reverse alive in both modes — USB reconnects restore the tunnel
+    // automatically, and WiFi mode can still accept USB simultaneously.
     let wifi_mode = cfg.bind_host != "127.0.0.1";
+    tokio::spawn(adb::maintain_reverse(cfg.port));
     if wifi_mode {
         if let Some(lan_ip) = detect_lan_ip() {
             let pairing_url = format!("helm://{}:{}", lan_ip, cfg.port);
