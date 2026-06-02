@@ -59,8 +59,17 @@ pub fn load_or_create(_cfg: &crate::config::HelmConfig) -> Result<SecurityContex
         let key_pem = key_pair.serialize_pem();
         std::fs::write(cert_path(), &cert_pem)
             .with_context(|| format!("writing {}", cert_path().display()))?;
-        std::fs::write(key_path(), &key_pem)
-            .with_context(|| format!("writing {}", key_path().display()))?;
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(key_path())
+                .and_then(|mut f| { use std::io::Write; f.write_all(key_pem.as_bytes()) })
+                .with_context(|| format!("writing {}", key_path().display()))?;
+        }
         (cert_pem, key_pem)
     };
 
@@ -86,7 +95,9 @@ pub fn load_or_create(_cfg: &crate::config::HelmConfig) -> Result<SecurityContex
         .collect::<Result<_, _>>()
         .context("parsing cert PEM")?;
 
-    let fingerprint: String = Sha256::digest(&cert_ders[0])
+    let first_cert = cert_ders.first()
+        .context("cert.pem contains no valid certificates")?;
+    let fingerprint: String = Sha256::digest(first_cert.as_ref())
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
