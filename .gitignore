@@ -43,6 +43,9 @@ Thumbs.db
 .worktrees/
 worktrees/
 
+# Superpowers dev artifacts
+docs/superpowers/
+
 # Misc
 *.log
 *.tmp

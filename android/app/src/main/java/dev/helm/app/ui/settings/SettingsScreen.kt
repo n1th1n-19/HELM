@@ -31,6 +31,7 @@ import dev.helm.app.data.nsd.DiscoveredAgent
 import dev.helm.app.data.prefs.ConnectionMode
 import dev.helm.app.data.prefs.ConnectionPreferences
 import dev.helm.app.ui.components.HelmCard
+import dev.helm.app.ui.components.StatusBadge
 import dev.helm.app.ui.theme.*
 
 @Composable
@@ -104,11 +105,24 @@ fun SettingsScreen(
                         }
                     }
 
-                    val targetUrl = if (state.mode == ConnectionMode.WIFI && state.wifiHost.isNotBlank())
-                        "ws://${state.wifiHost}:${state.wifiPort}/helm"
-                    else
+                    val targetUrl = if (state.mode == ConnectionMode.WIFI && state.wifiHost.isNotBlank()) {
+                        val scheme = if (state.isSecured) "wss" else "ws"
+                        "$scheme://${state.wifiHost}:${state.wifiPort}/helm"
+                    } else {
                         "ws://localhost:${state.wifiPort}/helm (USB)"
+                    }
                     Text("Target: $targetUrl", color = HelmTextTertiary, fontSize = 10.sp)
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (state.isSecured) {
+                            StatusBadge("Secured", HelmSuccess)
+                        } else {
+                            StatusBadge("USB Mode", HelmTextTertiary)
+                        }
+                    }
 
                     val (statusColor, statusText) = when (state.connectionState) {
                         ConnectionState.Connected    -> HelmSuccess to "Connected"

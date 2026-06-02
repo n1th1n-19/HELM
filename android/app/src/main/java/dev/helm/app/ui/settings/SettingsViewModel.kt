@@ -27,6 +27,7 @@ data class SettingsUiState(
     val isDiscovering: Boolean = false,
     val connectionState: ConnectionState = ConnectionState.Disconnected,
     val lastError: String? = null,
+    val isSecured: Boolean = false,
 )
 
 @HiltViewModel
@@ -60,6 +61,11 @@ class SettingsViewModel @Inject constructor(
                 _state.value = _state.value.copy(lastError = err)
             }
         }
+        viewModelScope.launch {
+            prefs.certFingerprint.collect { fp ->
+                _state.value = _state.value.copy(isSecured = fp != null)
+            }
+        }
     }
 
     fun setMode(mode: ConnectionMode) {
@@ -90,6 +96,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             prefs.setWifiHost(agent.host)
             prefs.setWifiPort(agent.port)
+            prefs.setToken(null)
+            prefs.setCertFingerprint(null)
             prefs.setMode(ConnectionMode.WIFI)
             repository.reconnect()
         }
@@ -97,14 +105,32 @@ class SettingsViewModel @Inject constructor(
 
     fun handleQrResult(raw: String) {
         val uri = android.net.Uri.parse(raw)
-        if (uri.scheme == "helm") {
-            val host = uri.host ?: return
-            val port = uri.port.takeIf { it > 0 } ?: ConnectionPreferences.DEFAULT_PORT
-            viewModelScope.launch {
-                prefs.setWifiHost(host)
-                prefs.setWifiPort(port)
-                prefs.setMode(ConnectionMode.WIFI)
-                repository.reconnect()
+        when (uri.scheme) {
+            "helm" -> {
+                val host = uri.host ?: return
+                val port = uri.port.takeIf { it > 0 } ?: ConnectionPreferences.DEFAULT_PORT
+                viewModelScope.launch {
+                    prefs.setWifiHost(host)
+                    prefs.setWifiPort(port)
+                    prefs.setToken(null)
+                    prefs.setCertFingerprint(null)
+                    prefs.setMode(ConnectionMode.WIFI)
+                    repository.reconnect()
+                }
+            }
+            "helms" -> {
+                val host = uri.host ?: return
+                val port = uri.port.takeIf { it > 0 } ?: ConnectionPreferences.DEFAULT_PORT
+                val token = uri.getQueryParameter("token") ?: return
+                val fingerprint = uri.getQueryParameter("cert") ?: return
+                viewModelScope.launch {
+                    prefs.setWifiHost(host)
+                    prefs.setWifiPort(port)
+                    prefs.setToken(token)
+                    prefs.setCertFingerprint(fingerprint)
+                    prefs.setMode(ConnectionMode.WIFI)
+                    repository.reconnect()
+                }
             }
         }
     }
