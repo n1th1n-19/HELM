@@ -19,7 +19,7 @@ class HelmWebSocketClient @Inject constructor(private val httpClient: HttpClient
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private var session: WebSocketSession? = null
 
-    /** URL the agent listens on (via ADB port forward: adb forward tcp:8080 tcp:8080) */
+    /** URL the agent listens on (via ADB port forward: adb forward tcp:9090 tcp:9090) */
     private val wsUrl = "ws://localhost:9090/helm"
 
     /**

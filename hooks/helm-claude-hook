@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+HELM Claude Code hook script.
+
+Receives Claude Code session events via stdin (JSON), updates
+~/.local/share/helm/claude_state.json for the HELM agent to read.
+
+Events handled:
+  UserPromptSubmit  — mark active, capture task from transcript
+  PreToolUse        — update current_file for file-editing tools
+  PostToolUse       — update current_file for file-editing tools
+  Stop              — mark idle, capture token usage from transcript
+  SubagentStop      — same as Stop
+"""
+
+import json
+import os
+import pathlib
+import sys
+import time
+
+STATE_FILE = (
+    pathlib.Path(os.environ.get("XDG_DATA_HOME", pathlib.Path.home() / ".local/share"))
+    / "helm"
+    / "claude_state.json"
+)
+MAX_TOKENS = int(os.environ.get("HELM_CLAUDE_MAX_TOKENS", "200000"))
+
+FILE_TOOLS = {"Edit", "Write", "Read", "NotebookEdit", "MultiEdit", "Bash"}
+
+
+def read_state() -> dict:
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def write_state(state: dict) -> None:
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    tmp.rename(STATE_FILE)
+
+
+def read_transcript_lines(transcript_path: str) -> list[str]:
+    try:
+        return pathlib.Path(transcript_path).read_text().splitlines()
+    except Exception:
+        return []
+
+
+def last_token_usage(lines: list[str]) -> dict:
+    """Return usage dict from the most recent assistant message that has one."""
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+            usage = (entry.get("message") or {}).get("usage", {})
+            # Claude Code uses prompt caching — real context size is the sum of all input buckets.
+            total = (
+                usage.get("input_tokens", 0)
+                + usage.get("cache_read_input_tokens", 0)
+                + usage.get("cache_creation_input_tokens", 0)
+            )
+            if total > 0:
+                return {**usage, "_total_input": total}
+        except Exception:
+            continue
+    return {}
+
+
+def _looks_like_noise(text: str) -> bool:
+    """Return True for terminal output, JSON pastes, and other non-prompt content."""
+    t = text.strip()
+    if not t:
+        return True
+    # Watch command output, terminal headers
+    if t.startswith("Every ") and "s:" in t[:20]:
+        return True
+    # Raw JSON blobs
+    if (t.startswith("{") and t.endswith("}")) or (t.startswith("[") and t.endswith("]")):
+        return True
+    # Very long multi-line pastes (terminal output)
+    if len(t) > 300 and t.count("\n") > 5:
+        return True
+    return False
+
+
+def last_human_prompt(lines: list[str]) -> str | None:
+    """Return the text of the most recent non-noisy human message."""
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+            if entry.get("type") == "user":
+                content = (entry.get("message") or {}).get("content", "")
+                text = None
+                if isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            text = part["text"].strip()
+                            break
+                elif isinstance(content, str):
+                    text = content.strip()
+                if text and not _looks_like_noise(text):
+                    return text[:200]
+        except Exception:
+            continue
+    return None
+
+
+def file_path_from_tool(tool_name: str, tool_input: dict) -> str | None:
+    if tool_name not in FILE_TOOLS:
+        return None
+    return tool_input.get("file_path") or tool_input.get("path") or tool_input.get("notebook_path")
+
+
+def main() -> None:
+    try:
+        hook_data = json.loads(sys.stdin.read())
+    except Exception:
+        sys.exit(0)
+
+    event = hook_data.get("hook_event_name", "")
+    session_id = hook_data.get("session_id", "")
+    transcript_path = hook_data.get("transcript_path", "")
+
+    state = read_state()
+
+    # Reset session timer when a new session begins.
+    if state.get("session_id") != session_id and session_id:
+        state["session_id"] = session_id
+        state["session_start_ms"] = int(time.time() * 1000)
+
+    if event == "UserPromptSubmit":
+        state["status"] = "active"
+        lines = read_transcript_lines(transcript_path)
+        task = last_human_prompt(lines)
+        if task:
+            state["task"] = task
+
+    elif event in ("PreToolUse", "PostToolUse"):
+        state["status"] = "active"
+        tool_name = hook_data.get("tool_name", "")
+        tool_input = hook_data.get("tool_input") or {}
+        path = file_path_from_tool(tool_name, tool_input)
+        if path:
+            state["current_file"] = path
+
+    elif event in ("Stop", "SubagentStop"):
+        state["status"] = "idle"
+        lines = read_transcript_lines(transcript_path)
+        usage = last_token_usage(lines)
+        if usage:
+            total_input = usage.get("_total_input", usage.get("input_tokens", 0))
+            state["tokens_used"] = total_input
+            state["tokens_max"] = MAX_TOKENS
+            if MAX_TOKENS > 0:
+                state["context_percent"] = round((total_input / MAX_TOKENS) * 100, 1)
+
+    state["updated_ms"] = int(time.time() * 1000)
+
+    try:
+        write_state(state)
+    except Exception as e:
+        # Never let hook errors surface to Claude Code.
+        sys.stderr.write(f"helm-claude-hook: write failed: {e}\n")
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

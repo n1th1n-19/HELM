@@ -17,6 +17,7 @@ mod window;
 mod workspace;
 
 // Command handler stub (Task 6).
+mod claude;
 mod commands;
 
 use anyhow::Result;
@@ -61,6 +62,7 @@ async fn main() -> Result<()> {
     tokio::spawn(git::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(window::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(claude::run(state.clone(), state_tx.clone(), cfg.clone()));
 
     let addr: SocketAddr = format!("{}:{}", cfg.bind_host, cfg.port).parse()?;
 

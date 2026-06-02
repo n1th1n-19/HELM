@@ -14,4 +14,5 @@ class OverviewViewModel @Inject constructor(
 ) : ViewModel() {
     val state: StateFlow<HelmState> = repository.state
     val connectionState: StateFlow<ConnectionState> = repository.connectionState
+    fun reconnect() = repository.reconnect()
 }

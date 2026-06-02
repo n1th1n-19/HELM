@@ -52,6 +52,7 @@ class HelmRepository @Inject constructor(
 
     fun connect() = connectionManager.start()
     fun disconnect() = connectionManager.stop()
+    fun reconnect() { connectionManager.stop(); connectionManager.start() }
 
     suspend fun sendCommand(command: HelmCommand) {
         val envelope = json.encodeToString(

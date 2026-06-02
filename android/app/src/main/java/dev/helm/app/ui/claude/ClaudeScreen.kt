@@ -225,9 +225,23 @@ private fun StatRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, fontSize = 11.sp, color = HelmTextSecondary)
-        Text(value, style = HelmMonoSmall, color = HelmTextPrimary)
+        Text(
+            label,
+            fontSize = 11.sp,
+            color = HelmTextSecondary,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            value,
+            style = HelmMonoSmall,
+            color = HelmTextPrimary,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 

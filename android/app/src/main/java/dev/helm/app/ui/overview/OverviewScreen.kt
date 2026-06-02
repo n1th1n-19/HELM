@@ -6,7 +6,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -49,6 +51,7 @@ fun OverviewScreen(
         HelmTopStatusBar(
             system = state.system,
             connectionState = connectionState,
+            onReconnect = viewModel::reconnect,
         )
         Spacer(Modifier.height(8.dp))
         Row(
@@ -111,6 +114,7 @@ fun OverviewScreen(
 fun HelmTopStatusBar(
     system: SystemUpdate,
     connectionState: ConnectionState,
+    onReconnect: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var timeText by remember { mutableStateOf(currentTimeString()) }
@@ -149,6 +153,16 @@ fun HelmTopStatusBar(
                 text = connLabel,
                 style = HelmMonoSmall,
                 color = dotColor,
+            )
+        }
+
+        // Reconnect button
+        IconButton(onClick = onReconnect, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Outlined.Refresh,
+                contentDescription = "Reconnect",
+                tint = HelmTextTertiary,
+                modifier = Modifier.size(16.dp),
             )
         }
 
@@ -221,11 +235,19 @@ private fun MetricItem(label: String, value: String, unit: String, accent: Color
             letterSpacing = 0.6.sp,
             color = HelmTextTertiary,
         )
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text(
                 text = value,
                 style = HelmMonoLarge,
                 color = accent,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
             if (unit.isNotEmpty()) {
                 Text(

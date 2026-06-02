@@ -16,10 +16,8 @@ import dev.helm.app.ui.claude.ClaudeScreen
 import dev.helm.app.ui.components.ConnectionBanner
 import dev.helm.app.ui.development.DevelopmentScreen
 import dev.helm.app.ui.git.GitScreen
-import dev.helm.app.ui.media.MediaScreen
 import dev.helm.app.ui.overview.OverviewScreen
 import dev.helm.app.ui.system.SystemScreen
-import dev.helm.app.ui.terminal.TerminalScreen
 import dev.helm.app.ui.theme.*
 
 enum class HelmTab(val label: String, val icon: ImageVector) {
@@ -27,8 +25,6 @@ enum class HelmTab(val label: String, val icon: ImageVector) {
     Development("Dev", Icons.Outlined.Code),
     Git("Git", Icons.Outlined.AccountTree),
     Claude("Claude", Icons.Outlined.AutoAwesome),
-    Media("Media", Icons.Outlined.MusicNote),
-    Terminal("Actions", Icons.Outlined.Terminal),
     System("System", Icons.Outlined.Memory),
 }
 
@@ -74,8 +70,6 @@ fun HelmNavigation(
                     HelmTab.Development -> DevelopmentScreen()
                     HelmTab.Git         -> GitScreen()
                     HelmTab.Claude      -> ClaudeScreen()
-                    HelmTab.Media       -> MediaScreen()
-                    HelmTab.Terminal    -> TerminalScreen()
                     HelmTab.System      -> SystemScreen()
                 }
             }
