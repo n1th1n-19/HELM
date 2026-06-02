@@ -14,18 +14,18 @@ curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/install.sh | ba
 
 # Or build from source
 cargo build --release
-./target/release/helm-agent run
+./target/release/helm run
 ```
 
 ## CLI
 
 ```
-helm-agent run      # start daemon
-helm-agent status   # show running status + address
-helm-agent stop     # stop daemon
-helm-agent restart  # stop + start
-helm-agent qr       # print WiFi pairing QR code
-helm-agent config   # dump current config
+helm run      # start daemon
+helm status   # show running status + address
+helm stop     # stop daemon
+helm restart  # stop + start
+helm qr       # print WiFi pairing QR code
+helm config   # dump current config
 ```
 
 Full CLI reference: [docs/cli.md](../docs/cli.md)

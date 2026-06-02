@@ -6,7 +6,7 @@ description = "HELM desktop agent — serves system data to Android sidecar disp
 license = "MIT"
 
 [[bin]]
-name = "helm-agent"
+name = "helm"
 path = "src/main.rs"
 
 [dependencies]

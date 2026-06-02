@@ -112,7 +112,7 @@ Each collector is an independent Tokio task writing to `Arc<RwLock<HelmState>>`.
 
 ### PID File
 
-`~/.local/share/helm/helm-agent.pid` — written on `run`, removed on clean exit or `stop`. Used by `status`, `stop`, and `restart` to communicate with the running daemon.
+`~/.local/share/helm/helm.pid` — written on `run`, removed on clean exit or `stop`. Used by `status`, `stop`, and `restart` to communicate with the running daemon.
 
 ---
 

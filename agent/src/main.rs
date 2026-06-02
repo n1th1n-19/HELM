@@ -160,7 +160,7 @@ async fn main() -> Result<()> {
 
         if cfg.mdns_enabled {
             let hostname = sysinfo::System::host_name()
-                .unwrap_or_else(|| "helm-agent".to_string());
+                .unwrap_or_else(|| "helm".to_string());
             tokio::spawn(mdns::advertise(cfg.port, hostname));
         }
     }

@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Removes HELM agent components installed by install.sh.
+# Removes HELM components installed by install.sh.
 # Idempotent — safe to run multiple times.
 
 set -euo pipefail
 
-echo "Uninstalling HELM agent..."
+PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+
+echo "Uninstalling HELM..."
 
 # 1. Stop + disable systemd service
-systemctl --user stop helm-agent 2>/dev/null && echo "  stopped helm-agent service" || true
-systemctl --user disable helm-agent 2>/dev/null || true
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+systemctl --user stop helm 2>/dev/null && echo "  stopped helm service" || true
+systemctl --user disable helm 2>/dev/null || true
 
 # 2. Remove systemd unit + reload daemon
-UNIT="$HOME/.config/systemd/user/helm-agent.service"
+UNIT="$HOME/.config/systemd/user/helm.service"
 if [ -f "$UNIT" ]; then
     rm -f "$UNIT"
     systemctl --user daemon-reload
@@ -19,7 +23,7 @@ if [ -f "$UNIT" ]; then
 fi
 
 # 3. Remove binary
-BIN="$HOME/.local/bin/helm-agent"
+BIN="$HOME/.local/bin/helm"
 if [ -f "$BIN" ]; then
     rm -f "$BIN"
     echo "  removed $BIN"
@@ -40,16 +44,30 @@ if [ -f "$UDEV_RULE" ]; then
     echo "  removed $UDEV_RULE"
 fi
 
-# 6. Remove firewall rule (ufw or firewalld; skip if neither active)
+# 6. Remove firewall rule (ufw / firewalld / iptables)
+PORT=9090
 if systemctl is-active --quiet ufw 2>/dev/null; then
-    sudo ufw delete allow 9090/tcp > /dev/null 2>&1 || true
+    sudo ufw delete allow "$PORT/tcp" > /dev/null 2>&1 || true
     sudo ufw reload > /dev/null 2>&1 || true
-    echo "  removed ufw rule for port 9090"
+    echo "  removed ufw rule for port $PORT"
 elif systemctl is-active --quiet firewalld 2>/dev/null; then
-    sudo firewall-cmd --permanent --remove-port=9090/tcp > /dev/null 2>&1 || true
+    sudo firewall-cmd --permanent --remove-port="$PORT/tcp" > /dev/null 2>&1 || true
     sudo firewall-cmd --reload > /dev/null 2>&1 || true
-    echo "  removed firewalld rule for port 9090"
+    echo "  removed firewalld rule for port $PORT"
 fi
 
-echo "Done. HELM agent uninstalled."
-echo "Note: PATH exports in .bashrc/.profile were not removed."
+# 7. Remove PATH entries added by install.sh (all shells)
+for RC in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.zshrc"; do
+    if [ -f "$RC" ] && grep -qF "$PATH_LINE" "$RC" 2>/dev/null; then
+        grep -vF "$PATH_LINE" "$RC" > "$RC.tmp" && mv "$RC.tmp" "$RC"
+        echo "  removed PATH entry from $RC"
+    fi
+done
+FISH_PATH="$HOME/.config/fish/conf.d/helm-path.fish"
+if [ -f "$FISH_PATH" ]; then
+    rm -f "$FISH_PATH"
+    echo "  removed $FISH_PATH"
+fi
+
+echo ""
+echo "Done. HELM uninstalled."

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
-    name = "helm-agent",
+    name = "helm",
     version,
     about = "HELM desktop agent — serves system data to Android sidecar display"
 )]
@@ -36,7 +36,7 @@ pub fn pid_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join("helm")
-        .join("helm-agent.pid")
+        .join("helm.pid")
 }
 
 pub fn write_pid() {

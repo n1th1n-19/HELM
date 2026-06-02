@@ -19,10 +19,11 @@ Handles everything: binary, systemd service, ADB auto-reverse, firewall rule. Sk
 ### Prerequisites
 
 **Workstation:**
-- Linux (Arch, Ubuntu, Fedora tested)
+- Linux (Arch, Ubuntu, Fedora, openSUSE tested)
 - Rust 1.75+ — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - ADB — `sudo pacman -S android-tools` / `sudo apt install adb`
-- Optional: `xdotool`, `playerctl`, `fuser`
+- Optional: `playerctl`, `fuser` (for music controls and dev server restart)
+- `xdotool` — installed automatically by `install.sh` (needed for window detection + system tray)
 
 **Android device:**
 - Android 10+ (API 29+)
@@ -37,31 +38,31 @@ cd agent
 cargo build --release
 ```
 
-Binary: `agent/target/release/helm-agent`
+Binary: `agent/target/release/helm`
 
 ### CLI Commands
 
 ```
-helm-agent run      # start agent
-helm-agent status   # check if running
-helm-agent stop     # stop agent
-helm-agent restart  # stop + start
-helm-agent qr       # print WiFi pairing QR
-helm-agent config   # show current config
+helm run      # start agent
+helm status   # check if running
+helm stop     # stop agent
+helm restart  # stop + start
+helm qr       # print WiFi pairing QR
+helm config   # show current config
 ```
 
 ### Autostart with systemd
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/helm-agent.service <<EOF
+cat > ~/.config/systemd/user/helm.service <<EOF
 [Unit]
 Description=HELM Desktop Agent
 After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=$HOME/.local/bin/helm-agent
+ExecStart=$HOME/.local/bin/helm
 Restart=on-failure
 RestartSec=5s
 
@@ -70,7 +71,7 @@ WantedBy=default.target
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable --now helm-agent
+systemctl --user enable --now helm
 ```
 
 ---
@@ -115,7 +116,7 @@ WiFi mode uses **TLS + PSK token authentication** automatically. No manual cert 
    ```
    Or print the QR any time without restarting:
    ```bash
-   helm-agent qr
+   helm qr
    ```
 
 3. On Android: **Settings tab → Scan QR** → connection is automatically TLS-secured with cert pinning. The Settings card shows a **Secured** badge.
@@ -135,7 +136,7 @@ WiFi mode uses **TLS + PSK token authentication** automatically. No manual cert 
 To re-pair after resetting (e.g. new device): delete the token file and restart the agent — a new token is generated. Cert stays the same unless you delete it too.
 
 ```bash
-rm ~/.config/helm/token && helm-agent restart
+rm ~/.config/helm/token && helm restart
 ```
 
 **Firewall:** The installer opens the port automatically. Manually:
@@ -174,10 +175,16 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ## Uninstall
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/uninstall.sh | bash
+```
+
+Or from a cloned repo:
+
+```bash
 bash uninstall.sh
 ```
 
-Removes: systemd service, binary (`~/.local/bin/helm-agent`), config dir (`~/.config/helm/`), udev rule, firewall rule.
+Removes: systemd service, binary (`~/.local/bin/helm`), config dir (`~/.config/helm/`), udev rule, firewall rule, and PATH entries from `.bashrc`, `.zshrc`, `.profile`, and fish config.
 
 ---
 
@@ -193,9 +200,9 @@ To disable kiosk mode, modify `KioskManager.kt` (settings toggle planned for a f
 
 **Agent won't start / port in use:**
 ```bash
-helm-agent status        # check if already running
-helm-agent stop          # stop it
-helm-agent run           # start fresh
+helm status        # check if already running
+helm stop          # stop it
+helm run           # start fresh
 ```
 
 **Android shows "Disconnected" (USB mode):**
@@ -206,7 +213,7 @@ helm-agent run           # start fresh
 
 **Android can't connect (WiFi mode):**
 - Confirm both devices are on the same LAN
-- Run `helm-agent qr` — verify the IP matches your desktop's LAN IP
+- Run `helm qr` — verify the IP matches your desktop's LAN IP
 - Check firewall: `sudo ufw status` — port 9090 must be allowed
 - Settings tab shows target URL and last error message
 
@@ -215,7 +222,7 @@ helm-agent run           # start fresh
 - Check D-Bus session: `echo $DBUS_SESSION_BUS_ADDRESS`
 
 **No window/workspace data:**
-- Install `xdotool`: `sudo pacman -S xdotool`
+- `xdotool` should be installed automatically by `install.sh`. If missing: `sudo pacman -S xdotool` / `sudo apt install xdotool`
 - Wayland: window detection not supported in V1
 
 **No temperature data:**
@@ -223,7 +230,7 @@ helm-agent run           # start fresh
 
 **Verbose logs:**
 ```bash
-RUST_LOG=debug helm-agent run
+RUST_LOG=debug helm run
 # Or for systemd:
-journalctl --user -u helm-agent -f
+journalctl --user -u helm -f
 ```
