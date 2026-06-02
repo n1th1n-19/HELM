@@ -99,28 +99,44 @@ ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", RUN+="/usr/bin/adb 
 
 ### WiFi Mode
 
+WiFi mode uses **TLS + PSK token authentication** automatically. No manual cert configuration required — the agent generates a self-signed cert and PSK token on first WiFi startup.
+
 1. Edit `~/.config/helm/agent.toml`:
    ```toml
    bind_host = "0.0.0.0"
    port = 9090
    ```
 
-2. Restart the agent — a QR code and pairing URL print on startup:
+2. Restart the agent — a secure `helms://` QR code prints on startup:
    ```
    HELM WiFi pairing — scan with Android app:
    [QR code]
-   helm://192.168.1.x:9090
+   helms://192.168.1.x:9090?token=<hex64>&cert=<sha256>
    ```
    Or print the QR any time without restarting:
    ```bash
    helm-agent qr
    ```
 
-3. On Android: **Settings tab → Scan QR** → auto-connects.
+3. On Android: **Settings tab → Scan QR** → connection is automatically TLS-secured with cert pinning. The Settings card shows a **Secured** badge.
 
-4. Alternative — manual entry or LAN discovery:
+4. Alternative — manual entry or LAN discovery (plain WS, no auth):
    - Settings tab → WiFi → enter host + port → Save
    - Settings tab → Discover → tap the agent when found
+
+**Security files** (generated automatically, WiFi mode only):
+
+| File | Purpose |
+|------|---------|
+| `~/.config/helm/cert.pem` | Self-signed TLS certificate (10-year validity) |
+| `~/.config/helm/key.pem` | Private key (0o600 permissions) |
+| `~/.config/helm/token` | 64-char hex PSK token (0o600 permissions) |
+
+To re-pair after resetting (e.g. new device): delete the token file and restart the agent — a new token is generated. Cert stays the same unless you delete it too.
+
+```bash
+rm ~/.config/helm/token && helm-agent restart
+```
 
 **Firewall:** The installer opens the port automatically. Manually:
 ```bash
@@ -152,6 +168,16 @@ cd android
 ./gradlew assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
+
+---
+
+## Uninstall
+
+```bash
+bash uninstall.sh
+```
+
+Removes: systemd service, binary (`~/.local/bin/helm-agent`), config dir (`~/.config/helm/`), udev rule, firewall rule.
 
 ---
 

@@ -37,8 +37,10 @@ helm-agent        # equivalent
 ```
 HELM WiFi pairing — scan with Android app:
 [QR code]
-helm://192.168.1.9:9090
+helms://192.168.1.9:9090?token=a3f1...&cert=b72c...
 ```
+
+The `helms://` scheme signals the Android app to use WSS + cert pinning + PSK token. USB mode still uses plain `ws://localhost`.
 
 ---
 
@@ -108,7 +110,7 @@ HELM WiFi pairing — scan with Android app:
 helm://192.168.1.9:9090
 ```
 
-Scan this in the Android app: **Settings tab → Scan QR**.
+Scan this in the Android app: **Settings tab → Scan QR**. The app auto-configures TLS + token from the URL — no manual cert setup needed.
 
 If `bind_host` is `127.0.0.1` (USB-only mode), prints a message explaining how to enable WiFi mode.
 
@@ -143,7 +145,15 @@ allowed_commands:
   git_pull
   git_push
   lock
+
+security:
+  cert_fingerprint = b72c3a...
+  cert_path        = /home/user/.config/helm/cert.pem
+  key_path         = /home/user/.config/helm/key.pem
+  token_path       = /home/user/.config/helm/token
 ```
+
+The `security:` section only appears in WiFi mode (`bind_host != "127.0.0.1"`).
 
 ---
 
