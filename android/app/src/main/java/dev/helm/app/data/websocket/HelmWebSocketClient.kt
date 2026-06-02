@@ -30,7 +30,7 @@ class HelmWebSocketClient @Inject constructor(
     private val prefs: ConnectionPreferences,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-    private var session: WebSocketSession? = null
+    private val session = java.util.concurrent.atomic.AtomicReference<WebSocketSession?>(null)
 
     private data class ConnectionParams(
         val url: String,
@@ -64,7 +64,7 @@ class HelmWebSocketClient @Inject constructor(
         val sess = activeClient.webSocketSession(params.url) {
             params.token?.let { t -> headers.append("X-Helm-Token", t) }
         }
-        session = sess
+        session.set(sess)
 
         try {
             for (frame in sess.incoming) {
@@ -75,22 +75,23 @@ class HelmWebSocketClient @Inject constructor(
                 }
             }
         } finally {
-            session = null
+            session.set(null)
             runCatching { sess.close() }
             customClient?.close()
         }
     }
 
     suspend fun sendText(text: String) {
-        session?.send(Frame.Text(text))
+        session.get()?.send(Frame.Text(text))
     }
 
     suspend fun disconnect() {
-        session?.close()
-        session = null
+        session.get()?.close()
+        session.set(null)
     }
 
     private fun buildSecureHttpClient(fingerprint: String): HttpClient {
+        require(fingerprint.isNotBlank()) { "Cert fingerprint cannot be blank" }
         val trustManager = PinnedTrustManager(fingerprint)
         val sslContext = SSLContext.getInstance("TLS").apply {
             init(null, arrayOf(trustManager), null)
@@ -108,6 +109,7 @@ class HelmWebSocketClient @Inject constructor(
 
 private class PinnedTrustManager(private val expectedFingerprint: String) : X509TrustManager {
     override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+        if (chain.isEmpty()) throw CertificateException("Empty certificate chain")
         val actual = MessageDigest.getInstance("SHA-256")
             .digest(chain[0].encoded)
             .joinToString("") { "%02x".format(it) }
