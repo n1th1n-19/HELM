@@ -1,20 +1,55 @@
 #!/usr/bin/env bash
 set -e
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BINARY="$REPO/agent/target/release/helm-agent"
-SERVICE_DIR="$HOME/.config/systemd/user"
-SERVICE_FILE="$SERVICE_DIR/helm-agent.service"
-UDEV_RULE="/etc/udev/rules.d/99-helm-adb.rules"
+REPO="n1th1n-19/HELM"
 PORT=9090
+INSTALL_DIR="$HOME/.local/bin"
+SERVICE_DIR="$HOME/.config/systemd/user"
 
-echo "==> Building HELM agent (release)..."
-cd "$REPO/agent"
-cargo build --release
+# ── Detect arch ───────────────────────────────────────────────────────────────
+ARCH=$(uname -m)
+case "$ARCH" in
+  x86_64)  ARTIFACT="helm-agent-linux-x86_64" ;;
+  aarch64) ARTIFACT="helm-agent-linux-aarch64" ;;
+  *)
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+    ;;
+esac
 
-echo "==> Installing systemd user service..."
+# ── Get latest release tag ────────────────────────────────────────────────────
+echo "==> Fetching latest HELM release..."
+LATEST=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+  | grep '"tag_name"' | cut -d'"' -f4)
+
+if [ -z "$LATEST" ]; then
+  echo "Error: could not fetch latest release. Check your internet connection."
+  exit 1
+fi
+
+echo "    Version: $LATEST"
+
+# ── Download binary ───────────────────────────────────────────────────────────
+mkdir -p "$INSTALL_DIR"
+BINARY="$INSTALL_DIR/helm-agent"
+URL="https://github.com/$REPO/releases/download/$LATEST/$ARTIFACT"
+
+echo "==> Downloading helm-agent ($ARCH)..."
+curl -fsSL "$URL" -o "$BINARY"
+chmod +x "$BINARY"
+echo "    Installed to $BINARY"
+
+# ── Ensure ~/.local/bin is in PATH ────────────────────────────────────────────
+if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+  echo "    Adding ~/.local/bin to PATH in ~/.bashrc and ~/.profile"
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.profile"
+fi
+
+# ── Systemd user service ──────────────────────────────────────────────────────
+echo "==> Setting up systemd user service..."
 mkdir -p "$SERVICE_DIR"
-cat > "$SERVICE_FILE" <<EOF
+cat > "$SERVICE_DIR/helm-agent.service" <<EOF
 [Unit]
 Description=HELM Desktop Agent
 After=graphical-session.target
@@ -33,13 +68,27 @@ systemctl --user daemon-reload
 systemctl --user enable helm-agent
 systemctl --user restart helm-agent
 
+# ── Udev rule for ADB auto-reverse ────────────────────────────────────────────
 echo "==> Installing udev rule for ADB auto-reverse (requires sudo)..."
 echo "ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", RUN+=\"/usr/bin/adb reverse tcp:$PORT tcp:$PORT\"" \
-  | sudo tee "$UDEV_RULE" > /dev/null
+  | sudo tee /etc/udev/rules.d/99-helm-adb.rules > /dev/null
 sudo udevadm control --reload-rules
 
+# ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo "==> Done."
-echo "    Agent:  systemctl --user status helm-agent"
-echo "    Port:   $PORT (adb reverse tcp:$PORT tcp:$PORT)"
-echo "    Logs:   journalctl --user -u helm-agent -f"
+echo "╔════════════════════════════════════════╗"
+echo "║  HELM installed successfully           ║"
+echo "╚════════════════════════════════════════╝"
+echo ""
+echo "  Agent:   $BINARY"
+echo "  Version: $LATEST"
+echo "  Port:    $PORT"
+echo ""
+echo "  Status:  systemctl --user status helm-agent"
+echo "  Logs:    journalctl --user -u helm-agent -f"
+echo ""
+echo "  Android: adb reverse tcp:$PORT tcp:$PORT"
+echo "           (runs automatically on USB connect)"
+echo ""
+echo "  Install Android APK from:"
+echo "  https://github.com/$REPO/releases/latest"
