@@ -20,7 +20,7 @@ class HelmWebSocketClient @Inject constructor(private val httpClient: HttpClient
     private var session: WebSocketSession? = null
 
     /** URL the agent listens on (via ADB port forward: adb forward tcp:8080 tcp:8080) */
-    private val wsUrl = "ws://localhost:8080/helm"
+    private val wsUrl = "ws://localhost:9090/helm"
 
     /**
      * Connect and emit [HelmEnvelope] messages as a cold [Flow].
