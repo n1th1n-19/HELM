@@ -23,9 +23,15 @@ mod workspace;
 mod claude;
 mod commands;
 
+mod security;
+#[cfg(feature = "tray")]
+mod tray;
+
 use anyhow::Result;
 use clap::Parser;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use tracing::{info, warn};
 
 #[tokio::main]
@@ -105,42 +111,95 @@ async fn main() -> Result<()> {
     tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(claude::run(state.clone(), state_tx.clone(), cfg.clone()));
 
+    let wifi_mode = cfg.bind_host != "127.0.0.1";
+
+    // Security context — WiFi mode only. USB mode binds to loopback; no TLS needed.
+    let (security, rate_limiter) = if wifi_mode {
+        match security::load_or_create(&cfg) {
+            Ok(ctx) => {
+                info!("TLS cert fingerprint: {}", ctx.cert_fingerprint);
+                (Some(Arc::new(ctx)), Arc::new(security::RateLimiter::new()))
+            }
+            Err(e) => anyhow::bail!("Failed to initialize security context: {e}"),
+        }
+    } else {
+        (None, Arc::new(security::RateLimiter::new()))
+    };
+
+    // Shared client count: websocket.rs increments/decrements, tray.rs reads.
+    let client_count = Arc::new(AtomicUsize::new(0));
+
+    // Tray shutdown channel. Always created; only populated when tray feature fires.
+    let (_shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+
     // Keep adb reverse alive in both modes — USB reconnects restore the tunnel
     // automatically, and WiFi mode can still accept USB simultaneously.
-    let wifi_mode = cfg.bind_host != "127.0.0.1";
     tokio::spawn(adb::maintain_reverse(cfg.port));
+
     if wifi_mode {
-        if let Some(lan_ip) = detect_lan_ip() {
-            let pairing_url = format!("helm://{}:{}", lan_ip, cfg.port);
-            println!("\nHELM WiFi pairing — scan with Android app:");
-            if let Err(e) = qr2term::print_qr(&pairing_url) {
-                warn!("Failed to print QR code: {e}");
+        if let Some(ref ctx) = security {
+            if let Some(lan_ip) = detect_lan_ip() {
+                let pairing_url = format!(
+                    "helms://{}:{}?token={}&cert={}",
+                    lan_ip, cfg.port, ctx.token, ctx.cert_fingerprint
+                );
+                println!("\nHELM WiFi pairing — scan with Android app:");
+                if let Err(e) = qr2term::print_qr(&pairing_url) {
+                    warn!("Failed to print QR code: {e}");
+                }
+                println!("{pairing_url}\n");
+                info!(
+                    "WiFi pairing URL: helms://{}:{}?cert={}",
+                    lan_ip, cfg.port, ctx.cert_fingerprint
+                );
+                tracing::debug!("WiFi pairing URL (full): {pairing_url}");
+            } else {
+                warn!("WiFi mode: could not detect LAN IP — enter agent IP manually in the app");
             }
-            println!("{pairing_url}\n");
-            info!("WiFi pairing URL: {pairing_url}");
-        } else {
-            warn!("WiFi mode: could not detect LAN IP — enter agent IP manually in the app");
         }
 
         if cfg.mdns_enabled {
-            let hostname = sysinfo::System::host_name().unwrap_or_else(|| "helm-agent".to_string());
+            let hostname = sysinfo::System::host_name()
+                .unwrap_or_else(|| "helm-agent".to_string());
             tokio::spawn(mdns::advertise(cfg.port, hostname));
         }
     }
 
-    // Graceful shutdown on SIGINT or SIGTERM.
+    // System tray (feature-gated; logs a warning and continues if init fails).
+    #[cfg(feature = "tray")]
+    {
+        let client_count_tray = client_count.clone();
+        let tx = _shutdown_tx.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = tray::run_tray(client_count_tray, tx) {
+                warn!("System tray unavailable: {e}");
+            }
+        });
+    }
+
+    // Graceful shutdown: Ctrl-C, SIGTERM, or tray Stop/Restart button.
     let shutdown = async {
         use tokio::signal::unix::{signal, SignalKind};
-        let mut sigterm = signal(SignalKind::terminate()).expect("failed to register SIGTERM handler");
+        let mut sigterm = signal(SignalKind::terminate())
+            .expect("failed to register SIGTERM handler");
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = sigterm.recv() => {}
+            _ = shutdown_rx.recv() => {}
         }
         info!("Shutting down HELM agent");
     };
 
     tokio::select! {
-        result = websocket::run_server(listener, state, state_rx, cfg) => {
+        result = websocket::run_server(
+            listener,
+            state,
+            state_rx,
+            cfg,
+            security,
+            rate_limiter,
+            client_count,
+        ) => {
             result?;
         }
         _ = shutdown => {}

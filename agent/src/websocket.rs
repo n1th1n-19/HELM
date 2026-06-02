@@ -1,12 +1,18 @@
 //! Async WebSocket server: serves a full snapshot on connect, then broadcasts
 //! state deltas to every connected client.
+//!
+//! In USB mode (security=None): plain WS over TCP.
+//! In WiFi mode (security=Some): TLS handshake first, then PSK token check in
+//! the WS upgrade header. Rate limiter fires before TLS to avoid CPU cost.
 
 use crate::config::HelmConfig;
+use crate::security::{RateLimiter, SecurityContext};
 use crate::state::{SharedState, StateRx};
 use anyhow::Result;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
@@ -16,33 +22,32 @@ use tracing::{error, info, warn};
 
 pub type BroadcastTx = broadcast::Sender<String>;
 
-type WsSink = SplitSink<WebSocketStream<TcpStream>, Message>;
-
 pub async fn run_server(
     listener: TcpListener,
     state: SharedState,
     mut state_rx: StateRx,
     cfg: HelmConfig,
+    security: Option<Arc<SecurityContext>>,
+    rate_limiter: Arc<RateLimiter>,
+    client_count: Arc<AtomicUsize>,
 ) -> Result<()> {
-
     let (broadcast_tx, _) = broadcast::channel::<String>(256);
     let broadcast_tx = Arc::new(broadcast_tx);
 
-    // Broadcaster task: watches for state changes, serializes and broadcasts.
+    // Broadcaster: watches for state changes, serializes and fans out to clients.
     {
         let state = state.clone();
         let broadcast_tx = broadcast_tx.clone();
         tokio::spawn(async move {
             loop {
-                // Wait for a state change notification.
                 if state_rx.changed().await.is_err() {
                     break;
                 }
-                let snapshot = {
+                let msgs = {
                     let s = state.read().await;
                     build_update_messages(&s)
                 };
-                for msg in snapshot {
+                for msg in msgs {
                     let _ = broadcast_tx.send(msg);
                 }
             }
@@ -52,21 +57,33 @@ pub async fn run_server(
     loop {
         match listener.accept().await {
             Ok((stream, peer_addr)) => {
+                // Rate-limit check happens at TCP accept, before TLS handshake cost.
+                if !rate_limiter.check(peer_addr.ip()) {
+                    info!("Rate-limited: dropping connection from {}", peer_addr);
+                    drop(stream);
+                    continue;
+                }
+
                 info!("New connection from {}", peer_addr);
                 let state = state.clone();
                 let broadcast_tx = broadcast_tx.clone();
                 let cfg = cfg.clone();
+                let security = security.clone();
+                let rate_limiter = rate_limiter.clone();
+                let client_count = client_count.clone();
+
                 tokio::spawn(async move {
-                    if let Err(e) =
-                        handle_connection(stream, peer_addr, state, broadcast_tx, cfg).await
+                    if let Err(e) = handle_connection(
+                        stream, peer_addr, state, broadcast_tx, cfg,
+                        security, rate_limiter, client_count,
+                    )
+                    .await
                     {
                         warn!("Connection {} error: {}", peer_addr, e);
                     }
                 });
             }
-            Err(e) => {
-                error!("Accept error: {}", e);
-            }
+            Err(e) => error!("Accept error: {}", e),
         }
     }
 }
@@ -77,63 +94,130 @@ async fn handle_connection(
     state: SharedState,
     broadcast_tx: Arc<BroadcastTx>,
     cfg: HelmConfig,
+    security: Option<Arc<SecurityContext>>,
+    rate_limiter: Arc<RateLimiter>,
+    client_count: Arc<AtomicUsize>,
 ) -> Result<()> {
-    let ws_stream = tokio_tungstenite::accept_async(stream).await?;
-    let (mut ws_tx, mut ws_rx) = ws_stream.split();
-
-    // Send full initial snapshot.
-    {
-        let s = state.read().await;
-        let msgs = build_full_snapshot(&s);
-        for msg in msgs {
-            ws_tx.send(Message::Text(msg.into())).await?;
+    match security {
+        None => {
+            // USB mode: plain WebSocket, no auth.
+            let ws = tokio_tungstenite::accept_async(stream).await?;
+            handle_ws(ws, peer_addr, state, broadcast_tx, cfg, client_count).await
+        }
+        Some(ctx) => {
+            // WiFi mode: TLS first, then PSK token check during WS upgrade.
+            let ip = peer_addr.ip();
+            let acceptor = tokio_rustls::TlsAcceptor::from(Arc::clone(&ctx.tls_config));
+            let tls_stream = match acceptor.accept(stream).await {
+                Ok(s) => s,
+                Err(e) => {
+                    rate_limiter.record_failure(ip);
+                    return Err(e.into());
+                }
+            };
+            let token = ctx.token.clone();
+            let rl = rate_limiter.clone();
+            let ws = tokio_tungstenite::accept_hdr_async(
+                tls_stream,
+                move |req: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                      resp: tokio_tungstenite::tungstenite::handshake::server::Response| {
+                    let provided = req
+                        .headers()
+                        .get("X-Helm-Token")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("");
+                    use subtle::ConstantTimeEq;
+                    if provided.as_bytes().ct_eq(token.as_bytes()).unwrap_u8() != 1 {
+                        rl.record_failure(ip);
+                        return Err(
+                            tokio_tungstenite::tungstenite::http::Response::builder()
+                                .status(
+                                    tokio_tungstenite::tungstenite::http::StatusCode::UNAUTHORIZED,
+                                )
+                                .body(None)
+                                .unwrap(),
+                        );
+                    }
+                    rl.record_success(ip);
+                    Ok(resp)
+                },
+            )
+            .await?;
+            handle_ws(ws, peer_addr, state, broadcast_tx, cfg, client_count).await
         }
     }
-
-    let mut broadcast_rx = broadcast_tx.subscribe();
-
-    loop {
-        tokio::select! {
-            // Forward broadcasts to this client.
-            result = broadcast_rx.recv() => {
-                match result {
-                    Ok(msg) => {
-                        if ws_tx.send(Message::Text(msg.into())).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(broadcast::error::RecvError::Lagged(n)) => {
-                        warn!("Client {} lagged by {} messages", peer_addr, n);
-                    }
-                    Err(_) => break,
-                }
-            }
-            // Handle messages from Android (commands, pings).
-            msg = ws_rx.next() => {
-                match msg {
-                    Some(Ok(Message::Text(text))) => {
-                        handle_client_message(&text, &mut ws_tx, &cfg, &state).await;
-                    }
-                    Some(Ok(Message::Ping(data))) => {
-                        let _ = ws_tx.send(Message::Pong(data)).await;
-                    }
-                    Some(Ok(Message::Close(_))) | None => break,
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    info!("Connection {} closed", peer_addr);
-    Ok(())
 }
 
-async fn handle_client_message(
+async fn handle_ws<S>(
+    ws_stream: WebSocketStream<S>,
+    peer_addr: SocketAddr,
+    state: SharedState,
+    broadcast_tx: Arc<BroadcastTx>,
+    cfg: HelmConfig,
+    client_count: Arc<AtomicUsize>,
+) -> Result<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    client_count.fetch_add(1, Ordering::Relaxed);
+    let (mut ws_tx, mut ws_rx) = ws_stream.split();
+    let mut broadcast_rx = broadcast_tx.subscribe();
+
+    let result: Result<()> = async {
+        // Send full initial snapshot.
+        {
+            let s = state.read().await;
+            for msg in build_full_snapshot(&s) {
+                ws_tx.send(Message::Text(msg.into())).await?;
+            }
+        }
+
+        loop {
+            tokio::select! {
+                result = broadcast_rx.recv() => {
+                    match result {
+                        Ok(msg) => {
+                            if ws_tx.send(Message::Text(msg.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(n)) => {
+                            warn!("Client {} lagged by {} messages", peer_addr, n);
+                        }
+                        Err(_) => break,
+                    }
+                }
+                msg = ws_rx.next() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            handle_client_message(&text, &mut ws_tx, &cfg, &state).await;
+                        }
+                        Some(Ok(Message::Ping(data))) => {
+                            let _ = ws_tx.send(Message::Pong(data)).await;
+                        }
+                        Some(Ok(Message::Close(_))) | None => break,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    .await;
+
+    client_count.fetch_sub(1, Ordering::Relaxed);
+    info!("Connection {} closed", peer_addr);
+    result
+}
+
+async fn handle_client_message<S>(
     text: &str,
-    ws_tx: &mut WsSink,
+    ws_tx: &mut SplitSink<WebSocketStream<S>, Message>,
     cfg: &HelmConfig,
     state: &SharedState,
-) {
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
     let val = match serde_json::from_str::<serde_json::Value>(text) {
         Ok(v) => v,
         Err(_) => return,
@@ -150,11 +234,11 @@ async fn handle_client_message(
                     Ok(cmd) => {
                         let ack = crate::commands::execute_command(cmd, cfg, state).await;
                         let envelope = make_envelope("command_ack", &ack);
-                        let _ = ws_tx.send(Message::Text(envelope.into())).await;
+                        let _ = ws_tx
+                            .send(Message::Text(envelope.into()))
+                            .await;
                     }
-                    Err(e) => {
-                        warn!("malformed command payload: {e}");
-                    }
+                    Err(e) => warn!("malformed command payload: {e}"),
                 }
             }
         }
@@ -178,22 +262,17 @@ fn build_full_snapshot(state: &crate::state::HelmState) -> Vec<String> {
 }
 
 fn build_update_messages(state: &crate::state::HelmState) -> Vec<String> {
-    // NOTE: This is a full-snapshot stand-in. The delta wire contract (send only
-    // changed fields) is not yet implemented — true diffing requires storing the
-    // previous snapshot and comparing field-by-field. Collectors express deltas
-    // by setting only changed Option fields, but the broadcaster re-sends all
-    // currently-set fields on every tick. This is correct but over-sends.
-    // Implement per-field diffing before optimizing for bandwidth.
+    // Full-snapshot stand-in: see comment in original file re: true delta diffing.
     build_full_snapshot(state)
 }
 
 pub fn make_envelope(msg_type: &str, payload: &impl serde::Serialize) -> String {
-    let envelope = serde_json::json!({
+    serde_json::json!({
         "type": msg_type,
         "ts": now_ms(),
         "payload": payload,
-    });
-    envelope.to_string()
+    })
+    .to_string()
 }
 
 pub fn now_ms() -> i64 {
