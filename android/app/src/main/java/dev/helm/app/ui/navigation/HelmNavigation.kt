@@ -1,6 +1,7 @@
 package dev.helm.app.ui.navigation
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -9,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.helm.app.data.websocket.ConnectionState
+import dev.helm.app.ui.components.ConnectionBanner
 import dev.helm.app.ui.development.DevelopmentScreen
 import dev.helm.app.ui.git.GitScreen
 import dev.helm.app.ui.media.MediaScreen
@@ -57,7 +59,9 @@ fun HelmNavigation(
             }
         },
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            ConnectionBanner(connectionState = connectionState)
+            Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
                 HelmTab.Overview    -> OverviewScreen(windowWidthSizeClass = windowWidthSizeClass)
                 HelmTab.Development -> DevelopmentScreen()
@@ -65,6 +69,7 @@ fun HelmNavigation(
                 HelmTab.Media       -> MediaScreen()
                 HelmTab.Terminal    -> TerminalScreen()
                 HelmTab.System      -> SystemScreen()
+            }
             }
         }
     }

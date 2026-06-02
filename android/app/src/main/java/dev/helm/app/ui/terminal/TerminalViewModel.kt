@@ -12,6 +12,8 @@ import dev.helm.app.data.websocket.ConnectionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,14 +35,10 @@ class TerminalViewModel @Inject constructor(
                 args = if (args.isEmpty()) null else args,
             )
             repository.sendCommand(cmd)
-            // Watch for ack
-            repository.state.collect { s ->
-                val ack = s.commandAcks[cmd.id]
-                if (ack != null) {
-                    _lastAck.value = ack
-                    return@collect
-                }
-            }
+            // Suspends until the ack arrives, then cancels automatically.
+            _lastAck.value = repository.state
+                .mapNotNull { it.commandAcks[cmd.id] }
+                .first()
         }
     }
 }

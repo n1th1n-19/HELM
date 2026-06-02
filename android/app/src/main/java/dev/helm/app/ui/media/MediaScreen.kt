@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,9 +87,12 @@ private fun AlbumArt(music: MusicUpdate, modifier: Modifier = Modifier) {
             .background(HelmCard),
         contentAlignment = Alignment.Center,
     ) {
-        if (music.albumArtB64 != null) {
+        val artBytes = remember(music.albumArtB64) {
+            music.albumArtB64?.let { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }
+        }
+        if (artBytes != null) {
             AsyncImage(
-                model = "data:image/png;base64,${music.albumArtB64}",
+                model = artBytes,
                 contentDescription = "Album art",
                 modifier = Modifier
                     .fillMaxSize()
