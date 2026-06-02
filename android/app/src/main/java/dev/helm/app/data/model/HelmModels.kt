@@ -122,6 +122,37 @@ data class SystemInfo(
     val resolution: String? = null,
 )
 
+// ── Claude AI ────────────────────────────────────────────────────────────────
+
+@Serializable
+data class ClaudeUpdate(
+    val status: String? = null,
+    val task: String? = null,
+    @SerialName("current_file") val currentFile: String? = null,
+    @SerialName("session_duration_secs") val sessionDurationSecs: Long? = null,
+    @SerialName("tokens_used") val tokensUsed: Long? = null,
+    @SerialName("tokens_max") val tokensMax: Long? = null,
+    @SerialName("context_percent") val contextPercent: Float? = null,
+)
+
+// ── Dashboard events (client-side, never serialized) ─────────────────────────
+
+enum class EventCategory { Build, Test, Claude, Git, System }
+
+data class DashboardEvent(
+    val timeLabel: String,
+    val message: String,
+    val category: EventCategory,
+)
+
+// ── Terminal status (client-side, never serialized) ──────────────────────────
+
+data class TerminalStatus(
+    val lastCommand: String? = null,
+    val running: Boolean = false,
+    val elapsedSecs: Long? = null,
+)
+
 // ── Commands ─────────────────────────────────────────────────────────────────
 
 @Serializable
@@ -162,4 +193,7 @@ data class HelmState(
     val process: ProcessUpdate = ProcessUpdate(),
     val systemInfo: SystemInfo? = null,
     val commandAcks: Map<String, CommandAck> = emptyMap(),
+    val claude: ClaudeUpdate = ClaudeUpdate(),
+    val events: List<DashboardEvent> = emptyList(),
+    val terminal: TerminalStatus = TerminalStatus(),
 )

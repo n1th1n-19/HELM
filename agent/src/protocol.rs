@@ -17,6 +17,7 @@ pub enum HelmMessage {
     MusicUpdate(MusicUpdate),
     WindowUpdate(WindowUpdate),
     VscodeUpdate(VscodeUpdate),
+    ClaudeUpdate(ClaudeUpdate),
     ProcessUpdate(ProcessUpdate),
     SystemInfo(SystemInfo),
     Command(Command),
@@ -131,6 +132,24 @@ pub struct WindowUpdate {
     pub workspace_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_num: Option<i32>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ClaudeUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_duration_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens_used: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens_max: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_percent: Option<f32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -11,6 +11,7 @@ pub struct HelmState {
     pub music: MusicUpdate,
     pub window: WindowUpdate,
     pub vscode: VscodeUpdate,
+    pub claude: ClaudeUpdate,
     pub process: ProcessUpdate,
     pub system_info: Option<SystemInfo>,
 }

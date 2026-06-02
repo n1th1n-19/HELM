@@ -46,9 +46,8 @@ fun MetricCard(
             ) {
                 Text(
                     text = value,
+                    style = HelmMonoLarge,
                     color = HelmTextPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
                 )
                 if (unit.isNotEmpty()) {
                     Text(
