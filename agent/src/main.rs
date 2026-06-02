@@ -23,6 +23,8 @@ mod workspace;
 mod claude;
 mod commands;
 
+mod security;
+
 use anyhow::Result;
 use clap::Parser;
 use std::net::SocketAddr;
