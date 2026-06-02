@@ -154,18 +154,17 @@ where
 {
     client_count.fetch_add(1, Ordering::Relaxed);
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
-
-    // Send full initial snapshot.
-    {
-        let s = state.read().await;
-        for msg in build_full_snapshot(&s) {
-            ws_tx.send(Message::Text(msg.into())).await?;
-        }
-    }
-
     let mut broadcast_rx = broadcast_tx.subscribe();
 
     let result: Result<()> = async {
+        // Send full initial snapshot.
+        {
+            let s = state.read().await;
+            for msg in build_full_snapshot(&s) {
+                ws_tx.send(Message::Text(msg.into())).await?;
+            }
+        }
+
         loop {
             tokio::select! {
                 result = broadcast_rx.recv() => {
