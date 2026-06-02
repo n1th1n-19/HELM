@@ -60,21 +60,24 @@ systemctl --user start helm-agent
 
 ---
 
-## Setting Up ADB Port Forwarding
+## Setting Up ADB Reverse Tunnel
 
-The Android app connects to `localhost:8080` on the device. ADB port forwarding maps this to `localhost:8080` on your workstation (where the agent runs).
+The Android app connects to `localhost:9090` on the device. ADB **reverse** tunneling forwards this to port 9090 on your workstation (where the agent runs).
+
+> **Important:** Use `adb reverse`, not `adb forward`. The Android app connects *to* the workstation, so reverse tunneling is required.
 
 ```bash
-adb forward tcp:8080 tcp:8080
+adb reverse tcp:9090 tcp:9090
+adb reverse --list  # verify it shows
 ```
 
-This command needs to be run each time the device is connected. You can automate it with a udev rule or a simple script.
+This command needs to be run each time the device is connected. You can automate it with a udev rule.
 
-### Automatic forwarding with udev (optional)
+### Automatic reverse tunnel with udev (optional)
 
 Create `/etc/udev/rules.d/99-helm-adb.rules`:
 ```
-ACTION=="add", SUBSYSTEM=="usb", RUN+="/usr/bin/adb forward tcp:8080 tcp:8080"
+ACTION=="add", SUBSYSTEM=="usb", RUN+="/usr/bin/adb reverse tcp:9090 tcp:9090"
 ```
 
 ---

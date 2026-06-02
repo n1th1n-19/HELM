@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// Inbound message envelope — used to deserialize messages arriving from Android.
 /// Outbound messages are serialized via `websocket::make_envelope`.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum HelmMessage {
