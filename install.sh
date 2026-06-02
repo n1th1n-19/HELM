@@ -29,6 +29,20 @@ fi
 
 echo "    Version: $LATEST"
 
+# ── Runtime dependencies (x86_64 tray build links against xdotool + appindicator)
+if [ "$ARCH" = "x86_64" ]; then
+  echo "==> Installing runtime dependencies..."
+  if command -v pacman &>/dev/null; then
+    sudo pacman -S --needed --noconfirm xdotool libayatana-appindicator 2>/dev/null || \
+    sudo pacman -S --needed --noconfirm xdotool 2>/dev/null || true
+  elif command -v apt-get &>/dev/null; then
+    sudo apt-get install -y xdotool libayatana-appindicator3-1 2>/dev/null || \
+    sudo apt-get install -y xdotool 2>/dev/null || true
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y xdotool 2>/dev/null || true
+  fi
+fi
+
 # ── Download binary ───────────────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR"
 BINARY="$INSTALL_DIR/helm"
@@ -41,9 +55,19 @@ echo "    Installed to $BINARY"
 
 # ── Ensure ~/.local/bin is in PATH ────────────────────────────────────────────
 if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-  echo "    Adding ~/.local/bin to PATH in ~/.bashrc and ~/.profile"
+  echo "    Adding ~/.local/bin to PATH..."
+  # bash
   echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
   echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.profile"
+  # zsh
+  if [ -f "$HOME/.zshrc" ]; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+  fi
+  # fish
+  if [ -d "$HOME/.config/fish" ]; then
+    mkdir -p "$HOME/.config/fish/conf.d"
+    echo 'fish_add_path $HOME/.local/bin' > "$HOME/.config/fish/conf.d/helm-path.fish"
+  fi
 fi
 
 # ── Systemd user service ──────────────────────────────────────────────────────
