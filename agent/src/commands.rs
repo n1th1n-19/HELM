@@ -90,6 +90,8 @@ async fn git_command(state: &SharedState, sub_args: &[&str]) -> CmdResult {
     };
 
     let mut cmd = TokioCommand::new("git");
+    // Prevent git from prompting for credentials (would hang .output()).
+    cmd.env("GIT_TERMINAL_PROMPT", "0");
     cmd.arg("-C").arg(&repo_path);
     for arg in sub_args {
         cmd.arg(arg);
@@ -163,38 +165,36 @@ async fn guarded_power(
     run_simple(&[program, sub]).await
 }
 
-/// Kill the process on the given port, then optionally start a replacement.
+/// Kill the process listening on the given port using `fuser`.
+///
+/// The `cmd` arg passthrough was intentionally removed — accepting an
+/// arbitrary command string from the Android client and running it via
+/// `sh -c` would bypass the allowlist entirely.
 async fn restart_dev_server(args: Args<'_>) -> CmdResult {
-    let port = args
+    let port_str = args
         .and_then(|a| a.get("port"))
         .ok_or_else(|| "restart_dev_server requires args.port".to_string())?;
 
-    // Kill whatever is listening on the port (best-effort).
-    let _ = TokioCommand::new("fuser")
-        .args(["-k", &format!("{port}/tcp")])
+    // Validate port is a legal port number before passing to fuser.
+    port_str
+        .parse::<u16>()
+        .map_err(|_| format!("invalid port '{port_str}': must be 0–65535"))?;
+
+    let output = TokioCommand::new("fuser")
+        .args(["-k", &format!("{port_str}/tcp")])
         .output()
-        .await;
+        .await
+        .map_err(|e| format!("fuser not available: {e}"))?;
 
-    // If a replacement command is provided, spawn it detached.
-    if let Some(run_cmd_str) = args.and_then(|a| a.get("cmd")) {
-        let mut child = TokioCommand::new("sh")
-            .args(["-c", run_cmd_str])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("failed to spawn dev server: {e}"))?;
-
-        // Detach — don't await the child.
-        tokio::spawn(async move {
-            let _ = child.wait().await;
-        });
-
-        Ok(Some(format!(
-            "killed port {port} and started: {run_cmd_str}"
-        )))
+    if output.status.success() {
+        Ok(Some(format!("killed process on port {port_str}")))
     } else {
-        Ok(Some(format!("killed process on port {port}")))
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            format!("fuser found nothing on port {port_str}")
+        } else {
+            stderr
+        })
     }
 }
 

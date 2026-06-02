@@ -8,6 +8,10 @@ use std::path::PathBuf;
 pub struct HelmConfig {
     #[serde(default = "default_port")]
     pub port: u16,
+    /// Bind address for the WebSocket server. Defaults to 127.0.0.1 (loopback
+    /// only — correct for USB/ADB use). Set to "0.0.0.0" only on trusted LANs.
+    #[serde(default = "default_bind_host")]
+    pub bind_host: String,
     #[serde(default = "default_git_watch_paths")]
     pub git_watch_paths: Vec<String>,
     #[serde(default = "default_poll_intervals")]
@@ -38,6 +42,9 @@ pub struct PollIntervals {
 
 fn default_port() -> u16 {
     8080
+}
+fn default_bind_host() -> String {
+    "127.0.0.1".to_string()
 }
 fn default_git_watch_paths() -> Vec<String> {
     vec![]
@@ -90,6 +97,7 @@ impl Default for HelmConfig {
     fn default() -> Self {
         HelmConfig {
             port: default_port(),
+            bind_host: default_bind_host(),
             git_watch_paths: default_git_watch_paths(),
             poll_intervals: default_poll_intervals(),
             allowed_commands: default_allowed_commands(),

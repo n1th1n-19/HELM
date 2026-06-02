@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
     tokio::spawn(window::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
 
-    let addr: SocketAddr = format!("0.0.0.0:{}", cfg.port).parse()?;
+    let addr: SocketAddr = format!("{}:{}", cfg.bind_host, cfg.port).parse()?;
 
     // Graceful shutdown on SIGINT or SIGTERM.
     let shutdown = async {
