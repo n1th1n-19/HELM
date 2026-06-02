@@ -329,7 +329,64 @@ tokio::select! {
 
 ---
 
-## 13. Out of Scope
+## 13. Uninstall Script
+
+### New file: `uninstall.sh`
+
+One-liner for users:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/uninstall.sh | bash
+```
+
+Or from a cloned repo: `bash uninstall.sh`
+
+**Removal sequence** (mirrors `install.sh` in reverse):
+
+1. Stop + disable systemd service (non-fatal if not running):
+   ```bash
+   systemctl --user stop helm-agent 2>/dev/null || true
+   systemctl --user disable helm-agent 2>/dev/null || true
+   ```
+
+2. Remove systemd unit + reload daemon:
+   ```bash
+   rm -f "$HOME/.config/systemd/user/helm-agent.service"
+   systemctl --user daemon-reload
+   ```
+
+3. Remove binary:
+   ```bash
+   rm -f "$HOME/.local/bin/helm-agent"
+   ```
+
+4. Remove config dir (certs, token, agent.toml):
+   ```bash
+   rm -rf "$HOME/.config/helm"
+   ```
+
+5. Remove udev rule + reload (requires sudo, skip if absent):
+   ```bash
+   sudo rm -f /etc/udev/rules.d/99-helm-adb.rules
+   sudo udevadm control --reload-rules 2>/dev/null || true
+   ```
+
+6. Remove firewall rule (conditional, skip if neither active):
+   ```bash
+   if systemctl is-active --quiet ufw 2>/dev/null; then
+     sudo ufw delete allow 9090/tcp > /dev/null
+     sudo ufw reload > /dev/null
+   elif systemctl is-active --quiet firewalld 2>/dev/null; then
+     sudo firewall-cmd --permanent --remove-port=9090/tcp > /dev/null
+     sudo firewall-cmd --reload > /dev/null
+   fi
+   ```
+
+Script exits 0 even if some steps are no-ops (idempotent). Prints what it removed. Does not touch user's PATH exports in `.bashrc`/`.profile` (those are benign and hard to remove safely).
+
+---
+
+## 14. Out of Scope
 
 - USB/ADB mode auth (loopback is safe, no change)
 - Token rotation UI (user can delete `~/.config/helm/token` to force regeneration; re-scanning QR on Android required after)
