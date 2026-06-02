@@ -20,7 +20,7 @@ allowed_commands = ["git_pull", "git_push", "lock"]
 ```
 
 ```bash
-helm-agent run
+helm run
 # Android app connects automatically via adb reverse
 ```
 
@@ -38,7 +38,7 @@ mdns_enabled = true
 ```
 
 ```bash
-helm-agent run
+helm run
 # QR code prints — scan in Android Settings tab
 ```
 
@@ -130,12 +130,12 @@ window_ms      = 1000
 
 ```bash
 # Installed by install.sh — or set up manually:
-systemctl --user enable helm-agent
-systemctl --user start helm-agent
+systemctl --user enable helm
+systemctl --user start helm
 
 # Check status
-helm-agent status
-journalctl --user -u helm-agent -f
+helm status
+journalctl --user -u helm -f
 ```
 
 ---

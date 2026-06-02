@@ -7,10 +7,10 @@
 ## Synopsis
 
 ```
-helm-agent [COMMAND] [OPTIONS]
+helm [COMMAND] [OPTIONS]
 ```
 
-When called with no command, `helm-agent` starts the daemon (same as `helm-agent run`).
+When called with no command, `helm` starts the daemon (same as `helm run`).
 
 ---
 
@@ -21,13 +21,13 @@ When called with no command, `helm-agent` starts the daemon (same as `helm-agent
 Start the agent daemon.
 
 ```bash
-helm-agent run
-helm-agent        # equivalent
+helm run
+helm        # equivalent
 ```
 
 **What it does:**
 - Binds the WebSocket server on `bind_host:port` (from config)
-- Writes a PID file to `~/.local/share/helm/helm-agent.pid`
+- Writes a PID file to `~/.local/share/helm/helm.pid`
 - Spawns all system collectors (CPU, RAM, network, git, music, …)
 - Maintains `adb reverse tcp:PORT tcp:PORT` every 3 seconds
 - In WiFi mode (`bind_host = "0.0.0.0"`): prints pairing QR code and starts mDNS advertisement
@@ -37,8 +37,10 @@ helm-agent        # equivalent
 ```
 HELM WiFi pairing — scan with Android app:
 [QR code]
-helm://192.168.1.9:9090
+helms://192.168.1.9:9090?token=a3f1...&cert=b72c...
 ```
+
+The `helms://` scheme signals the Android app to use WSS + cert pinning + PSK token. USB mode still uses plain `ws://localhost`.
 
 ---
 
@@ -47,7 +49,7 @@ helm://192.168.1.9:9090
 Show whether the agent is running and where it is listening.
 
 ```bash
-helm-agent status
+helm status
 ```
 
 **Output:**
@@ -68,7 +70,7 @@ If the PID file exists but the process is gone, prints `stopped (stale pid file 
 Stop the running agent.
 
 ```bash
-helm-agent stop
+helm stop
 ```
 
 Sends SIGTERM to the running process and waits up to 5 seconds for a clean exit. If the process does not exit within 5 seconds, sends SIGKILL. Removes the PID file.
@@ -85,10 +87,10 @@ stopped  pid=12345
 Stop the running agent, then start a new one.
 
 ```bash
-helm-agent restart
+helm restart
 ```
 
-Equivalent to `helm-agent stop && helm-agent run`. Useful after editing `~/.config/helm/agent.toml`.
+Equivalent to `helm stop && helm run`. Useful after editing `~/.config/helm/agent.toml`.
 
 ---
 
@@ -97,7 +99,7 @@ Equivalent to `helm-agent stop && helm-agent run`. Useful after editing `~/.conf
 Print the WiFi pairing QR code without starting the agent.
 
 ```bash
-helm-agent qr
+helm qr
 ```
 
 Reads the current config, detects the LAN IP, and prints:
@@ -108,7 +110,7 @@ HELM WiFi pairing — scan with Android app:
 helm://192.168.1.9:9090
 ```
 
-Scan this in the Android app: **Settings tab → Scan QR**.
+Scan this in the Android app: **Settings tab → Scan QR**. The app auto-configures TLS + token from the URL — no manual cert setup needed.
 
 If `bind_host` is `127.0.0.1` (USB-only mode), prints a message explaining how to enable WiFi mode.
 
@@ -119,7 +121,7 @@ If `bind_host` is `127.0.0.1` (USB-only mode), prints a message explaining how t
 Print the current effective configuration.
 
 ```bash
-helm-agent config
+helm config
 ```
 
 **Output:**
@@ -143,7 +145,15 @@ allowed_commands:
   git_pull
   git_push
   lock
+
+security:
+  cert_fingerprint = b72c3a...
+  cert_path        = /home/user/.config/helm/cert.pem
+  key_path         = /home/user/.config/helm/key.pem
+  token_path       = /home/user/.config/helm/token
 ```
+
+The `security:` section only appears in WiFi mode (`bind_host != "127.0.0.1"`).
 
 ---
 
@@ -188,7 +198,7 @@ window_ms      = 500
 
 ## PID File
 
-Location: `~/.local/share/helm/helm-agent.pid`
+Location: `~/.local/share/helm/helm.pid`
 
 Written on `run`, removed on clean shutdown or `stop`. Used by `status`, `stop`, and `restart` to locate the running daemon.
 
@@ -198,12 +208,12 @@ Written on `run`, removed on clean shutdown or `stop`. Used by `status`, `stop`,
 
 ```bash
 # Default (INFO level)
-helm-agent run
+helm run
 
 # Verbose
-RUST_LOG=debug helm-agent run
+RUST_LOG=debug helm run
 
 # Via systemd
-journalctl --user -u helm-agent -f
-journalctl --user -u helm-agent --since "1 hour ago"
+journalctl --user -u helm -f
+journalctl --user -u helm --since "1 hour ago"
 ```
