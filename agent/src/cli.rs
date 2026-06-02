@@ -122,8 +122,18 @@ pub fn cmd_qr(cfg: &crate::config::HelmConfig) {
         println!("Set bind_host = \"0.0.0.0\" in ~/.config/helm/agent.toml to enable WiFi.");
         return;
     }
+    let ctx = match crate::security::load_or_create(cfg) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to load security context: {e}");
+            return;
+        }
+    };
     let lan_ip = crate::detect_lan_ip().unwrap_or_else(|| cfg.bind_host.clone());
-    let url = format!("helm://{}:{}", lan_ip, cfg.port);
+    let url = format!(
+        "helms://{}:{}?token={}&cert={}",
+        lan_ip, cfg.port, ctx.token, ctx.cert_fingerprint
+    );
     println!("\nHELM WiFi pairing — scan with Android app:");
     if let Err(e) = qr2term::print_qr(&url) {
         eprintln!("Failed to render QR: {e}");
@@ -157,5 +167,18 @@ pub fn cmd_config(cfg: &crate::config::HelmConfig) {
     println!("\nallowed_commands:");
     for c in &cfg.allowed_commands {
         println!("  {c}");
+    }
+
+    if cfg.bind_host != "127.0.0.1" {
+        println!("\nsecurity:");
+        match crate::security::load_or_create(cfg) {
+            Ok(ctx) => {
+                println!("  cert_fingerprint = {}", ctx.cert_fingerprint);
+                println!("  cert_path        = {}", crate::security::cert_path().display());
+                println!("  key_path         = {}", crate::security::key_path().display());
+                println!("  token_path       = {}", crate::security::token_path().display());
+            }
+            Err(e) => println!("  error loading security context: {e}"),
+        }
     }
 }
