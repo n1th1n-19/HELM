@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   open-pr:
+    # Skip the version-bump commit pushed by the release workflow
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
