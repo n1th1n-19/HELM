@@ -9,6 +9,7 @@ import dev.helm.app.data.nsd.DiscoveredAgent
 import dev.helm.app.data.nsd.NsdDiscovery
 import dev.helm.app.data.prefs.ConnectionMode
 import dev.helm.app.data.prefs.ConnectionPreferences
+import dev.helm.app.data.repository.HelmRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val prefs: ConnectionPreferences,
+    private val repository: HelmRepository,
     private val nsdDiscovery: NsdDiscovery,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -52,7 +54,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setMode(mode: ConnectionMode) {
-        viewModelScope.launch { prefs.setMode(mode) }
+        viewModelScope.launch {
+            prefs.setMode(mode)
+            repository.reconnect()
+        }
     }
 
     fun setWifiHost(host: String) {
@@ -63,11 +68,21 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { prefs.setWifiPort(port) }
     }
 
+    /** Save host+port then reconnect. Called by the Save button. */
+    fun saveAndConnect(host: String, port: Int) {
+        viewModelScope.launch {
+            prefs.setWifiHost(host)
+            prefs.setWifiPort(port)
+            repository.reconnect()
+        }
+    }
+
     fun selectDiscovered(agent: DiscoveredAgent) {
         viewModelScope.launch {
             prefs.setWifiHost(agent.host)
             prefs.setWifiPort(agent.port)
             prefs.setMode(ConnectionMode.WIFI)
+            repository.reconnect()
         }
     }
 
@@ -80,6 +95,7 @@ class SettingsViewModel @Inject constructor(
                 prefs.setWifiHost(host)
                 prefs.setWifiPort(port)
                 prefs.setMode(ConnectionMode.WIFI)
+                repository.reconnect()
             }
         }
     }

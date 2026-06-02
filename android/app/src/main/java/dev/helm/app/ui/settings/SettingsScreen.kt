@@ -126,8 +126,10 @@ fun SettingsScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
                                 onClick = {
-                                    viewModel.setWifiHost(hostInput.trim())
-                                    portInput.toIntOrNull()?.let { viewModel.setWifiPort(it) }
+                                    viewModel.saveAndConnect(
+                                        hostInput.trim(),
+                                        portInput.toIntOrNull() ?: ConnectionPreferences.DEFAULT_PORT,
+                                    )
                                 },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = HelmNetwork),

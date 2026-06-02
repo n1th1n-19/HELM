@@ -24,6 +24,7 @@ class HelmWebSocketClient @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private var session: WebSocketSession? = null
 
+    // USB setup: adb reverse tcp:9090 tcp:9090  (reverse, not forward)
     private suspend fun resolveUrl(): String {
         val port = prefs.wifiPort.first()
         val mode = prefs.mode.first()
