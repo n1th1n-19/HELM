@@ -7,11 +7,11 @@ set -euo pipefail
 echo "Uninstalling HELM agent..."
 
 # 1. Stop + disable systemd service
-systemctl --user stop helm-agent 2>/dev/null && echo "  stopped helm-agent service" || true
-systemctl --user disable helm-agent 2>/dev/null || true
+systemctl --user stop helm 2>/dev/null && echo "  stopped helm service" || true
+systemctl --user disable helm 2>/dev/null || true
 
 # 2. Remove systemd unit + reload daemon
-UNIT="$HOME/.config/systemd/user/helm-agent.service"
+UNIT="$HOME/.config/systemd/user/helm.service"
 if [ -f "$UNIT" ]; then
     rm -f "$UNIT"
     systemctl --user daemon-reload
@@ -19,7 +19,7 @@ if [ -f "$UNIT" ]; then
 fi
 
 # 3. Remove binary
-BIN="$HOME/.local/bin/helm-agent"
+BIN="$HOME/.local/bin/helm"
 if [ -f "$BIN" ]; then
     rm -f "$BIN"
     echo "  removed $BIN"

@@ -9,8 +9,8 @@ SERVICE_DIR="$HOME/.config/systemd/user"
 # ── Detect arch ───────────────────────────────────────────────────────────────
 ARCH=$(uname -m)
 case "$ARCH" in
-  x86_64)  ARTIFACT="helm-agent-linux-x86_64" ;;
-  aarch64) ARTIFACT="helm-agent-linux-aarch64" ;;
+  x86_64)  ARTIFACT="helm-linux-x86_64" ;;
+  aarch64) ARTIFACT="helm-linux-aarch64" ;;
   *)
     echo "Unsupported architecture: $ARCH"
     exit 1
@@ -31,10 +31,10 @@ echo "    Version: $LATEST"
 
 # ── Download binary ───────────────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR"
-BINARY="$INSTALL_DIR/helm-agent"
+BINARY="$INSTALL_DIR/helm"
 URL="https://github.com/$REPO/releases/download/$LATEST/$ARTIFACT"
 
-echo "==> Downloading helm-agent ($ARCH)..."
+echo "==> Downloading helm ($ARCH)..."
 curl -fsSL "$URL" -o "$BINARY"
 chmod +x "$BINARY"
 echo "    Installed to $BINARY"
@@ -49,7 +49,7 @@ fi
 # ── Systemd user service ──────────────────────────────────────────────────────
 echo "==> Setting up systemd user service..."
 mkdir -p "$SERVICE_DIR"
-cat > "$SERVICE_DIR/helm-agent.service" <<EOF
+cat > "$SERVICE_DIR/helm.service" <<EOF
 [Unit]
 Description=HELM Desktop Agent
 After=graphical-session.target
@@ -69,8 +69,8 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
 
 systemctl --user daemon-reload
-systemctl --user enable helm-agent
-systemctl --user restart helm-agent || systemctl --user start helm-agent || true
+systemctl --user enable helm
+systemctl --user restart helm || systemctl --user start helm || true
 
 # ── Udev rule for ADB auto-reverse ────────────────────────────────────────────
 echo "==> Installing udev rule for ADB auto-reverse (requires sudo)..."
@@ -101,8 +101,8 @@ echo "  Agent:   $BINARY"
 echo "  Version: $LATEST"
 echo "  Port:    $PORT"
 echo ""
-echo "  Status:  systemctl --user status helm-agent"
-echo "  Logs:    journalctl --user -u helm-agent -f"
+echo "  Status:  systemctl --user status helm"
+echo "  Logs:    journalctl --user -u helm -f"
 echo ""
 echo "  Android: adb reverse tcp:$PORT tcp:$PORT"
 echo "           (runs automatically on USB connect)"

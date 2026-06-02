@@ -34,7 +34,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 **WiFi:**
 - Open **Settings tab** in the app
-- Tap **[Scan QR]** and scan the QR printed by `helm-agent qr`
+- Tap **[Scan QR]** and scan the QR printed by `helm qr`
 - Or tap **[Discover]** to find agents on the LAN via mDNS
 - Or manually enter host + port and tap **[Save]**
 

@@ -16,7 +16,7 @@ pub async fn advertise(port: u16, hostname: String) -> Result<()> {
         }
     };
 
-    let instance_name = format!("helm-agent-{hostname}");
+    let instance_name = format!("helm-{hostname}");
     let service_type = "_helm._tcp.local.";
     let host_fqdn = format!("{hostname}.local.");
 

@@ -99,7 +99,7 @@ This installs the agent, creates a systemd service, and handles ADB and firewall
 ```bash
 # Build the agent
 cd agent && cargo build --release
-./target/release/helm-agent run
+./target/release/helm run
 ```
 
 ### Connect Android
@@ -121,7 +121,7 @@ adb install android/app/build/outputs/apk/debug/app-debug.apk
 ## CLI
 
 ```
-helm-agent [COMMAND]
+helm [COMMAND]
 
 Commands:
   run      Start the agent (default)
