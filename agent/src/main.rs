@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
     let client_count = Arc::new(AtomicUsize::new(0));
 
     // Tray shutdown channel. Always created; only populated when tray feature fires.
-    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let (_shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Keep adb reverse alive in both modes — USB reconnects restore the tunnel
     // automatically, and WiFi mode can still accept USB simultaneously.
@@ -169,7 +169,7 @@ async fn main() -> Result<()> {
     #[cfg(feature = "tray")]
     {
         let client_count_tray = client_count.clone();
-        let tx = shutdown_tx.clone();
+        let tx = _shutdown_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = tray::run_tray(client_count_tray, tx) {
                 warn!("System tray unavailable: {e}");
