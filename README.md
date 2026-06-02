@@ -1,10 +1,32 @@
-# HELM
+<p align="center">
+  <img src="assets/helm.png" alt="HELM" width="200"/>
+</p>
 
-> Take control of your development environment.
+<h1 align="center">HELM</h1>
+<p align="center"><em>Take control of your development environment.</em></p>
+
+<p align="center">
+  <a href="https://github.com/n1th1n-19/HELM/releases/latest"><img src="https://img.shields.io/github/v/release/n1th1n-19/HELM?color=267CFD&label=latest" alt="Latest Release"/></a>
+  <img src="https://img.shields.io/badge/platform-Linux-lightgrey" alt="Platform"/>
+  <img src="https://img.shields.io/badge/android-10%2B-green" alt="Android"/>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License"/>
+</p>
+
+---
 
 HELM transforms any Android device into a dedicated developer command center — a sidecar display mounted beside your workstation showing real-time system monitoring, git insights, music controls, and active development environment status.
 
 **Think:** Mission Control + Developer Dashboard + Stream Deck + System Monitor — built for developers.
+
+---
+
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/install.sh | bash
+```
+
+Installs the agent binary, sets up a systemd user service, configures ADB auto-reverse, and opens the firewall port for WiFi connectivity.
 
 ---
 
@@ -15,29 +37,30 @@ HELM transforms any Android device into a dedicated developer command center —
 - **Music controls** — MPRIS2 integration (Spotify, MPV, VLC, Firefox, any compatible player)
 - **Active workspace** — VS Code workspace detection, current file, active window
 - **Quick actions** — restart dev server, git pull/push, open terminal, lock screen
-- **Always-on sidecar** — USB connection via ADB port forwarding (no Wi-Fi required)
+- **USB sidecar** — USB connection via ADB reverse tunnel (no Wi-Fi required)
+- **WiFi sidecar** — Wireless connection with QR code pairing and mDNS auto-discovery
 - **Local-first** — no cloud, no accounts, no telemetry
-- **Kiosk mode** — fullscreen, landscape lock, keep screen on
+- **Kiosk mode** — fullscreen, landscape lock, keep screen on, boot autostart
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────┐     WebSocket     ┌──────────────────────┐
-│   Android Device    │◄─────────────────►│  Desktop Agent       │
-│   (Kotlin/Compose)  │   ws://localhost   │  (Rust/Tokio)        │
-│                     │      :8080         │                       │
-│  • 6-tab dashboard  │                   │  • System metrics     │
-│  • Responsive UI    │  ADB port forward │  • Git collector      │
-│  • Connection mgmt  │  tcp:8080:8080    │  • MPRIS2 music       │
-│  • Kiosk mode       │                   │  • VS Code workspace  │
-└─────────────────────┘                   │  • Window detection   │
-                                          │  • Command executor   │
-                                          └──────────────────────┘
+┌─────────────────────┐     WebSocket      ┌──────────────────────┐
+│   Android Device    │◄──────────────────►│  Desktop Agent       │
+│   (Kotlin/Compose)  │  ws://localhost     │  (Rust/Tokio)        │
+│                     │      :9090  (USB)   │                      │
+│  • 7-tab dashboard  │  ws://LAN_IP:9090  │  • System metrics    │
+│  • Responsive UI    │       (WiFi)        │  • Git collector     │
+│  • USB + WiFi conn  │                     │  • MPRIS2 music      │
+│  • QR pairing       │  adb reverse        │  • VS Code workspace │
+│  • mDNS discovery   │  tcp:9090 tcp:9090  │  • Window detection  │
+│  • Kiosk mode       │  (auto-maintained)  │  • Command executor  │
+└─────────────────────┘                     └──────────────────────┘
 ```
 
-The desktop agent collects system data and pushes delta updates to the Android client over WebSocket. The Android device connects via USB using ADB port forwarding — no Wi-Fi or internet required.
+The desktop agent collects system data and pushes delta updates to the Android client over WebSocket. Connect via USB (zero-config) or WiFi (scan QR code).
 
 ---
 
@@ -45,7 +68,6 @@ The desktop agent collects system data and pushes delta updates to the Android c
 
 **Workstation:**
 - Linux (KDE/X11 recommended for full feature set; Wayland degrades gracefully)
-- Rust 1.75+
 - ADB installed
 
 **Android device:**
@@ -62,52 +84,70 @@ The desktop agent collects system data and pushes delta updates to the Android c
 
 ## Quick Start
 
-### 1. Build and run the desktop agent
+### Option A — Install script (recommended)
 
 ```bash
-cd agent
-cargo build --release
-./target/release/helm-agent
-# Agent listens on 127.0.0.1:8080 by default
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/install.sh | bash
 ```
 
-### 2. Forward the port via ADB
+This installs the agent, creates a systemd service, and handles ADB and firewall setup automatically.
+
+### Option B — Manual build
 
 ```bash
-# Run this whenever you connect your Android device
-adb forward tcp:8080 tcp:8080
+# Build the agent
+cd agent && cargo build --release
+./target/release/helm-agent run
 ```
 
-### 3. Install the Android app
+### Connect Android
 
+**USB (zero-config):**
 ```bash
-# Build an APK
-cd android
-./gradlew assembleRelease
-
-# Install on connected device
-adb install app/build/outputs/apk/release/app-release.apk
+# Plug in your Android device — ADB reverse is maintained automatically
+# Install the app
+adb install android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or sideload via Android Studio.
+**WiFi:**
+1. Set `bind_host = "0.0.0.0"` in `~/.config/helm/agent.toml`
+2. Restart agent — a QR code prints in the terminal
+3. Open HELM on Android → Settings tab → Scan QR
 
-### 4. Enable kiosk mode (optional)
+---
 
-In the Android app, the kiosk mode is enabled by default. The app hides the status bar and navigation bar, keeps the screen on, and locks to landscape. Mount your device beside your monitor.
+## CLI
+
+```
+helm-agent [COMMAND]
+
+Commands:
+  run      Start the agent (default)
+  status   Show running status and address
+  stop     Stop the running agent
+  restart  Stop then start
+  qr       Print WiFi pairing QR code
+  config   Print current configuration
+```
 
 ---
 
 ## Configuration
 
-The agent reads `~/.config/helm/agent.toml` (created automatically with defaults if absent):
+`~/.config/helm/agent.toml` (created with defaults on first run):
 
 ```toml
-# Network
-port = 8080
-bind_host = "127.0.0.1"   # Change to "0.0.0.0" for LAN access (not recommended)
+# USB mode (default) — only accept local connections via ADB reverse
+bind_host = "127.0.0.1"
+port = 9090
 
-# Allowed commands (from Android)
-# Uncomment actions you want to permit:
+# WiFi mode — accept connections from any LAN device
+# bind_host = "0.0.0.0"
+
+# mDNS advertisement for auto-discovery (WiFi mode only)
+mdns_enabled = true
+
+# Commands the Android app is allowed to trigger
 allowed_commands = [
     "git_pull",
     "git_push",
@@ -120,23 +160,22 @@ allowed_commands = [
     # "shutdown",
 ]
 
-# Poll intervals (milliseconds)
 [poll_intervals]
-cpu_ms = 1000
-memory_ms = 2000
-network_ms = 1000
-disk_ms = 2000
-battery_ms = 30000
+cpu_ms         = 1000
+memory_ms      = 2000
+network_ms     = 1000
+disk_ms        = 2000
 temperature_ms = 2000
-process_ms = 3000
-window_ms = 500
+battery_ms     = 30000
+process_ms     = 3000
+window_ms      = 500
 ```
 
 ---
 
 ## Protocol
 
-HELM uses a WebSocket-based delta protocol. On connect, the agent sends a full snapshot of all state. After that, only changed fields are sent. See [`protocol/README.md`](protocol/README.md) for the full message schema.
+HELM uses a WebSocket-based delta protocol. On connect, the agent sends a full state snapshot. After that, only changed fields are transmitted. See [`protocol/README.md`](protocol/README.md) for the full message schema.
 
 ---
 
@@ -146,10 +185,11 @@ HELM uses a WebSocket-based delta protocol. On connect, the agent sends a full s
 helm/
 ├── android/          # Android app (Kotlin, Jetpack Compose, Material 3)
 ├── agent/            # Desktop agent (Rust, Tokio, WebSocket)
-├── protocol/         # WebSocket message schema definitions (JSON Schema)
+├── protocol/         # WebSocket message schema (JSON Schema)
 ├── docs/             # Architecture and setup documentation
+├── assets/           # Logo and brand assets
 ├── plugins/          # Plugin system (V2, coming soon)
-└── examples/         # Usage examples
+└── install.sh        # One-liner installer
 ```
 
 ---
@@ -160,7 +200,7 @@ helm/
 |--------|------|
 | Android RAM | < 100 MB |
 | Android CPU | < 5% |
-| Android frame rate | 60 FPS |
+| Android FPS | 60 |
 | Agent RAM | < 20 MB |
 | Agent CPU at idle | ~0% |
 
@@ -169,10 +209,9 @@ helm/
 ## Roadmap
 
 - [ ] Album art display in media screen
-- [ ] Wayland active window support (via wlr-foreign-toplevel or KDE DBus)
+- [ ] Wayland active window support (wlr-foreign-toplevel / KDE DBus)
 - [ ] Plugin system (Docker, Kubernetes, GitHub, GitLab, Ollama, Claude Code)
-- [ ] Linux / macOS client
-- [ ] Wi-Fi connection mode
+- [ ] macOS agent support
 
 ---
 

@@ -1,101 +1,155 @@
+<p align="center">
+  <img src="../assets/helm.png" alt="HELM" width="140"/>
+</p>
+
 # HELM Setup Guide
 
-## Prerequisites
+## Quick Install (Recommended)
 
-### Workstation
+```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/install.sh | bash
+```
 
-- Linux (tested on Arch, Ubuntu, Fedora)
-- Rust 1.75+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
-- ADB (`sudo pacman -S android-tools` / `sudo apt install adb`)
+Handles everything: binary, systemd service, ADB auto-reverse, firewall rule. Skip to [Android App](#android-app) when done.
+
+---
+
+## Manual Setup
+
+### Prerequisites
+
+**Workstation:**
+- Linux (Arch, Ubuntu, Fedora tested)
+- Rust 1.75+ — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- ADB — `sudo pacman -S android-tools` / `sudo apt install adb`
 - Optional: `xdotool`, `playerctl`, `fuser`
 
-### Android Device
-
-- Android 10+
+**Android device:**
+- Android 10+ (API 29+)
 - USB debugging enabled (Settings → Developer Options → USB Debugging)
 
 ---
 
-## Building the Desktop Agent
+### Building the Desktop Agent
 
 ```bash
 cd agent
 cargo build --release
 ```
 
-The binary will be at `agent/target/release/helm-agent`.
+Binary: `agent/target/release/helm-agent`
 
-### Running the agent
+### CLI Commands
 
-```bash
-./target/release/helm-agent
 ```
-
-The agent will log to stdout. By default it binds to `127.0.0.1:8080`.
+helm-agent run      # start agent
+helm-agent status   # check if running
+helm-agent stop     # stop agent
+helm-agent restart  # stop + start
+helm-agent qr       # print WiFi pairing QR
+helm-agent config   # show current config
+```
 
 ### Autostart with systemd
 
-Create `~/.config/systemd/user/helm-agent.service`:
-
-```ini
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/helm-agent.service <<EOF
 [Unit]
 Description=HELM Desktop Agent
 After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/path/to/helm-agent
+ExecStart=$HOME/.local/bin/helm-agent
 Restart=on-failure
 RestartSec=5s
 
 [Install]
 WantedBy=default.target
-```
+EOF
 
-Enable and start:
-```bash
-systemctl --user enable helm-agent
-systemctl --user start helm-agent
+systemctl --user daemon-reload
+systemctl --user enable --now helm-agent
 ```
 
 ---
 
-## Setting Up ADB Reverse Tunnel
+## Connection Modes
 
-The Android app connects to `localhost:9090` on the device. ADB **reverse** tunneling forwards this to port 9090 on your workstation (where the agent runs).
+### USB Mode (default, zero-config)
 
-> **Important:** Use `adb reverse`, not `adb forward`. The Android app connects *to* the workstation, so reverse tunneling is required.
+The agent binds to `127.0.0.1:9090`. The Android app connects to `localhost:9090` on the device, which ADB tunnels over USB to the desktop.
+
+The agent automatically maintains the ADB reverse tunnel — just plug in your device:
 
 ```bash
+# Manual setup if needed:
 adb reverse tcp:9090 tcp:9090
-adb reverse --list  # verify it shows
 ```
 
-This command needs to be run each time the device is connected. You can automate it with a udev rule.
+> **Note:** Use `adb reverse`, not `adb forward`. Reverse tunnels device→host; forward tunnels host→device.
 
-### Automatic reverse tunnel with udev (optional)
+**Auto-reverse on connect (installed by the installer):**
 
-Create `/etc/udev/rules.d/99-helm-adb.rules`:
+`/etc/udev/rules.d/99-helm-adb.rules`:
 ```
-ACTION=="add", SUBSYSTEM=="usb", RUN+="/usr/bin/adb reverse tcp:9090 tcp:9090"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", RUN+="/usr/bin/adb reverse tcp:9090 tcp:9090"
+```
+
+### WiFi Mode
+
+1. Edit `~/.config/helm/agent.toml`:
+   ```toml
+   bind_host = "0.0.0.0"
+   port = 9090
+   ```
+
+2. Restart the agent — a QR code and pairing URL print on startup:
+   ```
+   HELM WiFi pairing — scan with Android app:
+   [QR code]
+   helm://192.168.1.x:9090
+   ```
+   Or print the QR any time without restarting:
+   ```bash
+   helm-agent qr
+   ```
+
+3. On Android: **Settings tab → Scan QR** → auto-connects.
+
+4. Alternative — manual entry or LAN discovery:
+   - Settings tab → WiFi → enter host + port → Save
+   - Settings tab → Discover → tap the agent when found
+
+**Firewall:** The installer opens the port automatically. Manually:
+```bash
+# UFW
+sudo ufw allow 9090/tcp && sudo ufw reload
+
+# firewalld
+sudo firewall-cmd --permanent --add-port=9090/tcp && sudo firewall-cmd --reload
 ```
 
 ---
 
-## Building the Android App
+## Android App
 
-Requirements: Android Studio or `sdkmanager` with:
-- Android SDK platform 35
-- Build tools 35.0.0
-- JDK 17+
+### Install from release
+
+```bash
+adb install helm-app.apk
+```
+
+Download the latest APK from [github.com/n1th1n-19/HELM/releases/latest](https://github.com/n1th1n-19/HELM/releases/latest).
+
+### Build from source
+
+Requirements: JDK 17+, Android SDK platform 35
 
 ```bash
 cd android
 ./gradlew assembleDebug
-```
-
-Install on device:
-```bash
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -103,40 +157,47 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Kiosk Mode
 
-HELM is designed to run in kiosk mode on a dedicated device mounted beside your monitor.
+HELM runs fullscreen by default: no status bar, no nav bar, landscape lock, screen always on. Mount your device beside your monitor.
 
-The app automatically:
-- Hides the status bar and navigation bar
-- Keeps the screen on
-- Locks to landscape orientation
-
-To disable kiosk mode, you can modify `KioskManager.kt` or add a settings toggle (coming in a future release).
-
-### Recommended mounting
-
-A cheap phone stand or arm mount works well. The device should be in landscape orientation at eye level beside your monitor.
+To disable kiosk mode, modify `KioskManager.kt` (settings toggle planned for a future release).
 
 ---
 
 ## Troubleshooting
 
-**Agent won't start:**
-- Check `~/.config/helm/agent.toml` for syntax errors
-- Try `RUST_LOG=debug ./helm-agent` for verbose logging
+**Agent won't start / port in use:**
+```bash
+helm-agent status        # check if already running
+helm-agent stop          # stop it
+helm-agent run           # start fresh
+```
 
-**Android shows "Disconnected":**
-- Verify `adb forward tcp:8080 tcp:8080` has been run
-- Verify the agent is running (`ps aux | grep helm-agent`)
-- Try disconnecting and reconnecting the USB cable
+**Android shows "Disconnected" (USB mode):**
+- Verify USB debugging is enabled on the Android device
+- Check ADB sees the device: `adb devices`
+- The agent maintains `adb reverse` automatically — check: `adb reverse --list`
+- Try unplugging and replugging (auto-reverse restores within 3 seconds)
+
+**Android can't connect (WiFi mode):**
+- Confirm both devices are on the same LAN
+- Run `helm-agent qr` — verify the IP matches your desktop's LAN IP
+- Check firewall: `sudo ufw status` — port 9090 must be allowed
+- Settings tab shows target URL and last error message
 
 **No music data:**
-- Ensure your player supports MPRIS2 (`playerctl status` should work)
-- Check D-Bus session is available (`echo $DBUS_SESSION_BUS_ADDRESS`)
+- Verify player supports MPRIS2: `playerctl status`
+- Check D-Bus session: `echo $DBUS_SESSION_BUS_ADDRESS`
 
 **No window/workspace data:**
-- Install `xdotool` (`sudo pacman -S xdotool`)
-- Note: Wayland is not supported for window detection in V1
+- Install `xdotool`: `sudo pacman -S xdotool`
+- Wayland: window detection not supported in V1
 
 **No temperature data:**
-- Not all hardware exposes temperature sensors
-- Try `cat /sys/class/thermal/thermal_zone*/temp`
+- Not all hardware exposes sensors: `cat /sys/class/thermal/thermal_zone*/temp`
+
+**Verbose logs:**
+```bash
+RUST_LOG=debug helm-agent run
+# Or for systemd:
+journalctl --user -u helm-agent -f
+```
