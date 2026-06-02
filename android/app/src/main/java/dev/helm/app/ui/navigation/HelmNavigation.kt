@@ -17,6 +17,7 @@ import dev.helm.app.ui.components.ConnectionBanner
 import dev.helm.app.ui.development.DevelopmentScreen
 import dev.helm.app.ui.git.GitScreen
 import dev.helm.app.ui.overview.OverviewScreen
+import dev.helm.app.ui.settings.SettingsScreen
 import dev.helm.app.ui.system.SystemScreen
 import dev.helm.app.ui.theme.*
 
@@ -26,6 +27,7 @@ enum class HelmTab(val label: String, val icon: ImageVector) {
     Git("Git", Icons.Outlined.AccountTree),
     Claude("Claude", Icons.Outlined.AutoAwesome),
     System("System", Icons.Outlined.Memory),
+    Settings("Settings", Icons.Outlined.Settings),
 }
 
 @Composable
@@ -71,6 +73,7 @@ fun HelmNavigation(
                     HelmTab.Git         -> GitScreen()
                     HelmTab.Claude      -> ClaudeScreen()
                     HelmTab.System      -> SystemScreen()
+                    HelmTab.Settings    -> SettingsScreen()
                 }
             }
         }

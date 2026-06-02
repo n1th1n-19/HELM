@@ -1,4 +1,5 @@
 mod config;
+mod mdns;
 mod protocol;
 mod state;
 mod websocket;
@@ -22,7 +23,7 @@ mod commands;
 
 use anyhow::Result;
 use std::net::SocketAddr;
-use tracing::info;
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -66,6 +67,27 @@ async fn main() -> Result<()> {
 
     let addr: SocketAddr = format!("{}:{}", cfg.bind_host, cfg.port).parse()?;
 
+    // WiFi mode: print pairing QR code and start mDNS advertisement.
+    let wifi_mode = cfg.bind_host != "127.0.0.1";
+    if wifi_mode {
+        if let Some(lan_ip) = detect_lan_ip() {
+            let pairing_url = format!("helm://{}:{}", lan_ip, cfg.port);
+            println!("\nHELM WiFi pairing — scan with Android app:");
+            if let Err(e) = qr2term::print_qr(&pairing_url) {
+                warn!("Failed to print QR code: {e}");
+            }
+            println!("{pairing_url}\n");
+            info!("WiFi pairing URL: {pairing_url}");
+        } else {
+            warn!("WiFi mode: could not detect LAN IP — enter agent IP manually in the app");
+        }
+
+        if cfg.mdns_enabled {
+            let hostname = sysinfo::System::host_name().unwrap_or_else(|| "helm-agent".to_string());
+            tokio::spawn(mdns::advertise(cfg.port, hostname));
+        }
+    }
+
     // Graceful shutdown on SIGINT or SIGTERM.
     let shutdown = async {
         use tokio::signal::unix::{signal, SignalKind};
@@ -85,6 +107,20 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Detect the LAN IP by connecting a UDP socket to an external address (no
+/// data is sent — this just reveals which local interface the OS would use).
+fn detect_lan_ip() -> Option<String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    let ip = addr.ip();
+    if ip.is_loopback() {
+        return None;
+    }
+    Some(ip.to_string())
 }
 
 fn collect_system_info() -> protocol::SystemInfo {

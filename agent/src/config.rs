@@ -18,6 +18,9 @@ pub struct HelmConfig {
     pub poll_intervals: PollIntervals,
     #[serde(default = "default_allowed_commands")]
     pub allowed_commands: Vec<String>,
+    /// Advertise via mDNS when bind_host is not loopback. Set false to disable.
+    #[serde(default = "default_mdns_enabled")]
+    pub mdns_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +88,9 @@ fn default_poll_intervals() -> PollIntervals {
         window_ms: default_window_ms(),
     }
 }
+fn default_mdns_enabled() -> bool {
+    true
+}
 fn default_allowed_commands() -> Vec<String> {
     vec![
         "git_pull".to_string(),
@@ -101,6 +107,7 @@ impl Default for HelmConfig {
             git_watch_paths: default_git_watch_paths(),
             poll_intervals: default_poll_intervals(),
             allowed_commands: default_allowed_commands(),
+            mdns_enabled: default_mdns_enabled(),
         }
     }
 }
