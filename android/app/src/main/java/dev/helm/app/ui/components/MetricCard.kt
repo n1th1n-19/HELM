@@ -33,7 +33,6 @@ fun MetricCard(
                     .height(2.dp)
                     .background(accent, RoundedCornerShape(1.dp))
             )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 color = HelmTextSecondary,
