@@ -64,9 +64,13 @@ RestartSec=5s
 WantedBy=default.target
 EOF
 
+# curl | bash strips D-Bus env vars; restore them so systemctl --user works
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+
 systemctl --user daemon-reload
 systemctl --user enable helm-agent
-systemctl --user restart helm-agent
+systemctl --user restart helm-agent || systemctl --user start helm-agent || true
 
 # ── Udev rule for ADB auto-reverse ────────────────────────────────────────────
 echo "==> Installing udev rule for ADB auto-reverse (requires sudo)..."
