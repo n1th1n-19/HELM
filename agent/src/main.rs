@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
     };
 
     tokio::select! {
-        result = websocket::run_server(addr, state, state_rx) => {
+        result = websocket::run_server(addr, state, state_rx, cfg) => {
             result?;
         }
         _ = shutdown => {}
