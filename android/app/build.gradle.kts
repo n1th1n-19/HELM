@@ -78,4 +78,10 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+
+    // DataStore (connection settings persistence)
+    implementation(libs.datastore.preferences)
+
+    // QR code scanning
+    implementation(libs.zxing.android.embedded)
 }

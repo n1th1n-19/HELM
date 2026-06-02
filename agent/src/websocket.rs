@@ -19,13 +19,11 @@ pub type BroadcastTx = broadcast::Sender<String>;
 type WsSink = SplitSink<WebSocketStream<TcpStream>, Message>;
 
 pub async fn run_server(
-    addr: SocketAddr,
+    listener: TcpListener,
     state: SharedState,
     mut state_rx: StateRx,
     cfg: HelmConfig,
 ) -> Result<()> {
-    let listener = TcpListener::bind(addr).await?;
-    info!("HELM agent listening on {}", addr);
 
     let (broadcast_tx, _) = broadcast::channel::<String>(256);
     let broadcast_tx = Arc::new(broadcast_tx);

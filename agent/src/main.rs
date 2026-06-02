@@ -1,4 +1,7 @@
+mod adb;
+mod cli;
 mod config;
+mod mdns;
 mod protocol;
 mod state;
 mod websocket;
@@ -21,11 +24,42 @@ mod claude;
 mod commands;
 
 use anyhow::Result;
+use clap::Parser;
 use std::net::SocketAddr;
-use tracing::info;
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = cli::Cli::parse();
+    let cfg = config::load_config()?;
+
+    // Dispatch non-daemon subcommands synchronously before starting the runtime.
+    match args.command {
+        Some(cli::Command::Status) => {
+            cli::cmd_status(&cfg);
+            return Ok(());
+        }
+        Some(cli::Command::Stop) => {
+            cli::cmd_stop();
+            return Ok(());
+        }
+        Some(cli::Command::Restart) => {
+            cli::cmd_stop();
+            // Fall through to run.
+        }
+        Some(cli::Command::Qr) => {
+            cli::cmd_qr(&cfg);
+            return Ok(());
+        }
+        Some(cli::Command::Config) => {
+            cli::cmd_config(&cfg);
+            return Ok(());
+        }
+        Some(cli::Command::Run) | None => {
+            // Fall through to start the daemon.
+        }
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -33,8 +67,15 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let cfg = config::load_config()?;
+    cli::write_pid();
+
     info!("Starting HELM agent v{}", env!("CARGO_PKG_VERSION"));
+
+    // Bind the WebSocket port FIRST — fail fast before spawning any collectors.
+    let addr: SocketAddr = format!("{}:{}", cfg.bind_host, cfg.port).parse()?;
+    let listener = tokio::net::TcpListener::bind(addr).await
+        .map_err(|e| anyhow::anyhow!("cannot bind {}:{} — {e}", cfg.bind_host, cfg.port))?;
+    info!("HELM agent listening on {}", addr);
 
     let (state, state_tx, state_rx) = state::new_shared_state();
 
@@ -64,7 +105,28 @@ async fn main() -> Result<()> {
     tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(claude::run(state.clone(), state_tx.clone(), cfg.clone()));
 
-    let addr: SocketAddr = format!("{}:{}", cfg.bind_host, cfg.port).parse()?;
+    // Keep adb reverse alive in both modes — USB reconnects restore the tunnel
+    // automatically, and WiFi mode can still accept USB simultaneously.
+    let wifi_mode = cfg.bind_host != "127.0.0.1";
+    tokio::spawn(adb::maintain_reverse(cfg.port));
+    if wifi_mode {
+        if let Some(lan_ip) = detect_lan_ip() {
+            let pairing_url = format!("helm://{}:{}", lan_ip, cfg.port);
+            println!("\nHELM WiFi pairing — scan with Android app:");
+            if let Err(e) = qr2term::print_qr(&pairing_url) {
+                warn!("Failed to print QR code: {e}");
+            }
+            println!("{pairing_url}\n");
+            info!("WiFi pairing URL: {pairing_url}");
+        } else {
+            warn!("WiFi mode: could not detect LAN IP — enter agent IP manually in the app");
+        }
+
+        if cfg.mdns_enabled {
+            let hostname = sysinfo::System::host_name().unwrap_or_else(|| "helm-agent".to_string());
+            tokio::spawn(mdns::advertise(cfg.port, hostname));
+        }
+    }
 
     // Graceful shutdown on SIGINT or SIGTERM.
     let shutdown = async {
@@ -78,13 +140,28 @@ async fn main() -> Result<()> {
     };
 
     tokio::select! {
-        result = websocket::run_server(addr, state, state_rx, cfg) => {
+        result = websocket::run_server(listener, state, state_rx, cfg) => {
             result?;
         }
         _ = shutdown => {}
     }
 
+    cli::remove_pid();
     Ok(())
+}
+
+/// Detect the LAN IP by connecting a UDP socket to an external address (no
+/// data is sent — this just reveals which local interface the OS would use).
+pub(crate) fn detect_lan_ip() -> Option<String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    let ip = addr.ip();
+    if ip.is_loopback() {
+        return None;
+    }
+    Some(ip.to_string())
 }
 
 fn collect_system_info() -> protocol::SystemInfo {

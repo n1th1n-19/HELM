@@ -78,6 +78,19 @@ echo "ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", RUN+=\"
   | sudo tee /etc/udev/rules.d/99-helm-adb.rules > /dev/null
 sudo udevadm control --reload-rules
 
+# ── Firewall: open agent port for WiFi connectivity ───────────────────────────
+if systemctl is-active --quiet ufw 2>/dev/null; then
+  echo "==> Opening port $PORT in UFW for WiFi connectivity..."
+  sudo ufw allow "$PORT/tcp" > /dev/null
+  sudo ufw reload > /dev/null
+  echo "    ufw: port $PORT/tcp allowed"
+elif systemctl is-active --quiet firewalld 2>/dev/null; then
+  echo "==> Opening port $PORT in firewalld for WiFi connectivity..."
+  sudo firewall-cmd --permanent --add-port="$PORT/tcp" > /dev/null
+  sudo firewall-cmd --reload > /dev/null
+  echo "    firewalld: port $PORT/tcp allowed"
+fi
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "╔════════════════════════════════════════╗"
