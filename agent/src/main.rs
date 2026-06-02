@@ -24,6 +24,8 @@ mod claude;
 mod commands;
 
 mod security;
+#[cfg(feature = "tray")]
+mod tray;
 
 use anyhow::Result;
 use clap::Parser;
