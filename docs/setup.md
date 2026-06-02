@@ -19,10 +19,11 @@ Handles everything: binary, systemd service, ADB auto-reverse, firewall rule. Sk
 ### Prerequisites
 
 **Workstation:**
-- Linux (Arch, Ubuntu, Fedora tested)
+- Linux (Arch, Ubuntu, Fedora, openSUSE tested)
 - Rust 1.75+ — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - ADB — `sudo pacman -S android-tools` / `sudo apt install adb`
-- Optional: `xdotool`, `playerctl`, `fuser`
+- Optional: `playerctl`, `fuser` (for music controls and dev server restart)
+- `xdotool` — installed automatically by `install.sh` (needed for window detection + system tray)
 
 **Android device:**
 - Android 10+ (API 29+)
@@ -174,10 +175,16 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ## Uninstall
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/uninstall.sh | bash
+```
+
+Or from a cloned repo:
+
+```bash
 bash uninstall.sh
 ```
 
-Removes: systemd service, binary (`~/.local/bin/helm`), config dir (`~/.config/helm/`), udev rule, firewall rule.
+Removes: systemd service, binary (`~/.local/bin/helm`), config dir (`~/.config/helm/`), udev rule, firewall rule, and PATH entries from `.bashrc`, `.zshrc`, `.profile`, and fish config.
 
 ---
 
@@ -215,7 +222,7 @@ helm run           # start fresh
 - Check D-Bus session: `echo $DBUS_SESSION_BUS_ADDRESS`
 
 **No window/workspace data:**
-- Install `xdotool`: `sudo pacman -S xdotool`
+- `xdotool` should be installed automatically by `install.sh`. If missing: `sudo pacman -S xdotool` / `sudo apt install xdotool`
 - Wayland: window detection not supported in V1
 
 **No temperature data:**

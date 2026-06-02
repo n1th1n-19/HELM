@@ -77,7 +77,7 @@ The desktop agent collects system data and pushes delta updates to the Android c
 - Phone, tablet, or foldable
 
 **Optional for full feature set:**
-- `xdotool` — active window detection (X11)
+- `xdotool` — active window detection + system tray (auto-installed by `install.sh` on x86_64)
 - `playerctl` / MPRIS2-compatible players — music controls
 - `fuser` — dev server restart
 - VS Code or VSCodium
@@ -220,16 +220,10 @@ helm/
 ## Uninstall
 
 ```bash
-bash uninstall.sh
-```
-
-Or:
-
-```bash
 curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/uninstall.sh | bash
 ```
 
-Stops the service, removes the binary, config dir (certs, token, `agent.toml`), systemd unit, udev rule, and firewall rule.
+Stops the service, removes the binary, config dir (certs, token, `agent.toml`), systemd unit, udev rule, firewall rule, and PATH entries from all shells (bash, zsh, fish).
 
 ---
 
