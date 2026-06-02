@@ -1,9 +1,10 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request:
+    types: [closed]
+    branches:
+      - prod
 
 permissions:
   contents: write
@@ -11,6 +12,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.target }}
+    if: github.event.pull_request.merged == true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -24,6 +26,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=$(grep '^version' agent/Cargo.toml | head -1 | cut -d'"' -f2)" >> $GITHUB_OUTPUT
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -54,7 +60,7 @@ jobs:
       - name: Build (aarch64 via cross)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         working-directory: agent
-        # GTK cross-compilation unsupported — ship headless binary; tray requires building from source
+        # GTK cross-compilation unsupported — headless binary; tray requires building from source
         run: cross build --release --no-default-features --target ${{ matrix.target }}
 
       - name: Rename binary
@@ -72,8 +78,20 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=$(grep '^version' agent/Cargo.toml | head -1 | cut -d'"' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -84,6 +102,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
           files: artifacts/*
           generate_release_notes: true
           body: |
@@ -94,3 +113,32 @@ jobs:
             ```
 
             See [setup guide](docs/setup.md) for full instructions.
+
+      - name: Bump patch version on main (prepares next release)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin main
+          git checkout main
+
+          OLD="${{ steps.version.outputs.version }}"
+          MAJOR=$(echo $OLD | cut -d. -f1)
+          MINOR=$(echo $OLD | cut -d. -f2)
+          PATCH=$(echo $OLD | cut -d. -f3)
+          NEW="$MAJOR.$MINOR.$((PATCH + 1))"
+
+          # Cargo.toml
+          sed -i "s/^version = \"$OLD\"/version = \"$NEW\"/" agent/Cargo.toml
+
+          # build.gradle.kts
+          OLD_CODE=$(grep 'versionCode' android/app/build.gradle.kts | grep -o '[0-9]*')
+          sed -i "s/versionCode = $OLD_CODE/versionCode = $((OLD_CODE + 1))/" android/app/build.gradle.kts
+          sed -i "s/versionName = \"$OLD\"/versionName = \"$NEW\"/" android/app/build.gradle.kts
+
+          # Update Cargo.lock
+          cd agent && cargo update --workspace --quiet 2>/dev/null || true && cd ..
+
+          git add agent/Cargo.toml agent/Cargo.lock android/app/build.gradle.kts
+          git diff --cached --quiet || git commit -m "chore(release): bump version to $NEW"
+          git push origin main
