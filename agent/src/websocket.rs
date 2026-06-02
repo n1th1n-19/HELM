@@ -1,6 +1,7 @@
 //! Async WebSocket server: serves a full snapshot on connect, then broadcasts
 //! state deltas to every connected client.
 
+use crate::config::HelmConfig;
 use crate::state::{SharedState, StateRx};
 use anyhow::Result;
 use futures_util::stream::SplitSink;
@@ -17,7 +18,12 @@ pub type BroadcastTx = broadcast::Sender<String>;
 
 type WsSink = SplitSink<WebSocketStream<TcpStream>, Message>;
 
-pub async fn run_server(addr: SocketAddr, state: SharedState, mut state_rx: StateRx) -> Result<()> {
+pub async fn run_server(
+    addr: SocketAddr,
+    state: SharedState,
+    mut state_rx: StateRx,
+    cfg: HelmConfig,
+) -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
     info!("HELM agent listening on {}", addr);
 
@@ -51,9 +57,10 @@ pub async fn run_server(addr: SocketAddr, state: SharedState, mut state_rx: Stat
                 info!("New connection from {}", peer_addr);
                 let state = state.clone();
                 let broadcast_tx = broadcast_tx.clone();
+                let cfg = cfg.clone();
                 tokio::spawn(async move {
                     if let Err(e) =
-                        handle_connection(stream, peer_addr, state, broadcast_tx).await
+                        handle_connection(stream, peer_addr, state, broadcast_tx, cfg).await
                     {
                         warn!("Connection {} error: {}", peer_addr, e);
                     }
@@ -71,6 +78,7 @@ async fn handle_connection(
     peer_addr: SocketAddr,
     state: SharedState,
     broadcast_tx: Arc<BroadcastTx>,
+    cfg: HelmConfig,
 ) -> Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
@@ -106,7 +114,7 @@ async fn handle_connection(
             msg = ws_rx.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        handle_client_message(&text, &mut ws_tx).await;
+                        handle_client_message(&text, &mut ws_tx, &cfg, &state).await;
                     }
                     Some(Ok(Message::Ping(data))) => {
                         let _ = ws_tx.send(Message::Pong(data)).await;
@@ -122,13 +130,37 @@ async fn handle_connection(
     Ok(())
 }
 
-async fn handle_client_message(text: &str, ws_tx: &mut WsSink) {
-    // Parse ping/pong or command — commands handled by commands.rs in Task 6.
-    if let Ok(val) = serde_json::from_str::<serde_json::Value>(text) {
-        if val.get("type").and_then(|t| t.as_str()) == Some("ping") {
+async fn handle_client_message(
+    text: &str,
+    ws_tx: &mut WsSink,
+    cfg: &HelmConfig,
+    state: &SharedState,
+) {
+    let val = match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    match val.get("type").and_then(|t| t.as_str()) {
+        Some("ping") => {
             let pong = serde_json::json!({"type": "pong", "ts": now_ms(), "payload": {}});
             let _ = ws_tx.send(Message::Text(pong.to_string().into())).await;
         }
+        Some("command") => {
+            if let Some(payload) = val.get("payload") {
+                match serde_json::from_value::<crate::protocol::Command>(payload.clone()) {
+                    Ok(cmd) => {
+                        let ack = crate::commands::execute_command(cmd, cfg, state).await;
+                        let envelope = make_envelope("command_ack", &ack);
+                        let _ = ws_tx.send(Message::Text(envelope.into())).await;
+                    }
+                    Err(e) => {
+                        warn!("malformed command payload: {e}");
+                    }
+                }
+            }
+        }
+        _ => {}
     }
 }
 
