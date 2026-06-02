@@ -36,10 +36,13 @@ if [ "$ARCH" = "x86_64" ]; then
     sudo pacman -S --needed --noconfirm xdotool libayatana-appindicator 2>/dev/null || \
     sudo pacman -S --needed --noconfirm xdotool 2>/dev/null || true
   elif command -v apt-get &>/dev/null; then
+    sudo apt-get update -qq
     sudo apt-get install -y xdotool libayatana-appindicator3-1 2>/dev/null || \
     sudo apt-get install -y xdotool 2>/dev/null || true
   elif command -v dnf &>/dev/null; then
     sudo dnf install -y xdotool 2>/dev/null || true
+  elif command -v zypper &>/dev/null; then
+    sudo zypper install -y xdotool 2>/dev/null || true
   fi
 fi
 
@@ -53,21 +56,27 @@ curl -fsSL "$URL" -o "$BINARY"
 chmod +x "$BINARY"
 echo "    Installed to $BINARY"
 
-# ── Ensure ~/.local/bin is in PATH ────────────────────────────────────────────
+# ── Ensure ~/.local/bin is in PATH (all shells) ───────────────────────────────
+PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+PATH_ADDED=0
 if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-  echo "    Adding ~/.local/bin to PATH..."
-  # bash
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.profile"
+  PATH_ADDED=1
+  SHELL_NAME=$(basename "${SHELL:-bash}")
+  echo "    Configuring PATH for $SHELL_NAME..."
+
+  # bash — always write (may not be $SHELL but likely available)
+  grep -qxF "$PATH_LINE" "$HOME/.bashrc" 2>/dev/null || \
+    echo "$PATH_LINE" >> "$HOME/.bashrc"
+  grep -qxF "$PATH_LINE" "$HOME/.profile" 2>/dev/null || \
+    echo "$PATH_LINE" >> "$HOME/.profile"
+
   # zsh
-  if [ -f "$HOME/.zshrc" ]; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-  fi
+  touch "$HOME/.zshrc"
+  grep -qxF "$PATH_LINE" "$HOME/.zshrc" || echo "$PATH_LINE" >> "$HOME/.zshrc"
+
   # fish
-  if [ -d "$HOME/.config/fish" ]; then
-    mkdir -p "$HOME/.config/fish/conf.d"
-    echo 'fish_add_path $HOME/.local/bin' > "$HOME/.config/fish/conf.d/helm-path.fish"
-  fi
+  mkdir -p "$HOME/.config/fish/conf.d"
+  echo 'fish_add_path $HOME/.local/bin' > "$HOME/.config/fish/conf.d/helm-path.fish"
 fi
 
 # ── Systemd user service ──────────────────────────────────────────────────────
@@ -133,3 +142,9 @@ echo "           (runs automatically on USB connect)"
 echo ""
 echo "  Install Android APK from:"
 echo "  https://github.com/$REPO/releases/latest"
+if [ "$PATH_ADDED" = "1" ]; then
+  echo ""
+  echo "  PATH updated. Reload your shell to use 'helm' immediately:"
+  echo "    bash/zsh:  source ~/.bashrc   or open a new terminal"
+  echo "    fish:      exec fish          or open a new terminal"
+fi
