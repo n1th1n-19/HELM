@@ -10,6 +10,7 @@
 use crate::config::HelmConfig;
 use crate::protocol::{MusicUpdate, PlaybackState};
 use crate::state::{SharedState, StateTx};
+use base64::Engine;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time;
@@ -96,6 +97,10 @@ async fn get_music_update(conn: &Connection) -> Option<MusicUpdate> {
         .ok()
         .map(|v| v as f32);
 
+    // Album art: read from mpris:artUrl if it is a local file.
+    let album_art_b64 = get_str_from_metadata(&metadata, "mpris:artUrl")
+        .and_then(|url| encode_album_art(&url));
+
     // Player display name (strip the MPRIS prefix).
     let player_display = player_name
         .trim_start_matches("org.mpris.MediaPlayer2.")
@@ -106,12 +111,49 @@ async fn get_music_update(conn: &Connection) -> Option<MusicUpdate> {
         title,
         artist,
         album,
-        album_art_b64: None, // Art encoding deferred; Android handles null art.
+        album_art_b64,
         duration_ms,
         position_ms,
         volume,
         state: Some(state),
     })
+}
+
+/// Maximum album art file size we are willing to base64-encode (500 KB).
+const MAX_ART_BYTES: u64 = 500 * 1024;
+
+/// Read a local `file://` art URL, detect JPEG/PNG via magic bytes, and return
+/// a base64-encoded data-URI string.  Returns `None` for HTTP(S) URLs, files
+/// that are too large, or unrecognised formats.
+fn encode_album_art(art_url: &str) -> Option<String> {
+    // Only handle local files for now.
+    let path = if let Some(stripped) = art_url.strip_prefix("file://") {
+        stripped.to_string()
+    } else {
+        // http/https — skip without logging (expected).
+        return None;
+    };
+
+    let meta = std::fs::metadata(&path).ok()?;
+    if meta.len() > MAX_ART_BYTES {
+        debug!(path, "album art too large, skipping");
+        return None;
+    }
+
+    let data = std::fs::read(&path).ok()?;
+
+    // Detect image type from magic bytes.
+    let mime = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        "image/png"
+    } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "image/jpeg"
+    } else {
+        debug!(path, "unknown image format, skipping album art");
+        return None;
+    };
+
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+    Some(format!("data:{mime};base64,{b64}"))
 }
 
 pub async fn run(state: SharedState, tx: StateTx, _cfg: HelmConfig) {
@@ -136,10 +178,7 @@ pub async fn run(state: SharedState, tx: StateTx, _cfg: HelmConfig) {
         }
 
         let update = match &conn {
-            Some(c) => match get_music_update(c).await {
-                Some(u) => u,
-                None => MusicUpdate::default(),
-            },
+            Some(c) => get_music_update(c).await.unwrap_or_default(),
             None => MusicUpdate::default(),
         };
 

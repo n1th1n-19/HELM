@@ -16,8 +16,8 @@ use tokio::sync::mpsc;
 use tokio::time;
 use tracing::{debug, warn};
 
-fn collect_git(repo_path: &str) -> anyhow::Result<GitUpdate> {
-    let repo = Repository::discover(repo_path)?;
+fn collect_git(repo_path: String) -> anyhow::Result<GitUpdate> {
+    let repo = Repository::discover(&repo_path)?;
     let workdir = repo
         .workdir()
         .ok_or_else(|| anyhow::anyhow!("bare repo"))?;
@@ -52,7 +52,8 @@ fn collect_git(repo_path: &str) -> anyhow::Result<GitUpdate> {
         {
             staged += 1;
         }
-        if s.contains(git2::Status::INDEX_DELETED) {
+        // Count deleted once per entry regardless of which side (index or worktree).
+        if s.contains(git2::Status::INDEX_DELETED) || s.contains(git2::Status::WT_DELETED) {
             deleted += 1;
         }
         if s.contains(git2::Status::WT_MODIFIED)
@@ -60,9 +61,6 @@ fn collect_git(repo_path: &str) -> anyhow::Result<GitUpdate> {
             || s.contains(git2::Status::WT_TYPECHANGE)
         {
             modified += 1;
-        }
-        if s.contains(git2::Status::WT_DELETED) {
-            deleted += 1;
         }
         if s.contains(git2::Status::WT_NEW) {
             untracked += 1;
@@ -175,10 +173,15 @@ fn make_watcher(
 }
 
 async fn update_state(state: &SharedState, tx: &StateTx, repo_path: &str) {
-    let update = match collect_git(repo_path) {
-        Ok(u) => u,
-        Err(e) => {
+    let path = repo_path.to_string();
+    let update = match tokio::task::spawn_blocking(move || collect_git(path)).await {
+        Ok(Ok(u)) => u,
+        Ok(Err(e)) => {
             debug!("git collect failed for {repo_path}: {e}");
+            GitUpdate::default()
+        }
+        Err(e) => {
+            debug!("git spawn_blocking panicked: {e}");
             GitUpdate::default()
         }
     };
