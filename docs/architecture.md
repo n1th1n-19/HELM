@@ -15,7 +15,8 @@ HELM has two components communicating over a local WebSocket connection:
 Android App ──── WebSocket ──── Desktop Agent
 (Consumer)     ws://localhost    (Producer)
                   :9090  (USB)
-              ws://LAN_IP:9090
+              wss://LAN_IP:9090
+              + TLS + PSK token
                   (WiFi)
 ```
 
@@ -68,6 +69,9 @@ agent/src/
 ├── disk.rs          — Bytes/sec read/write (2s)
 ├── battery.rs       — Battery level, charging (30s)
 ├── process.rs       — Top 10 processes by CPU (3s)
+│
+├── security.rs      — TLS cert gen/load, PSK token gen/load, SHA-256 fingerprint, RateLimiter
+├── tray.rs          — Cross-platform system tray icon (tray-icon crate, optional feature)
 │
 ├── git.rs           — git2 repo state + notify file watcher
 ├── workspace.rs     — VS Code workspace detection
@@ -173,12 +177,17 @@ Settings changes call `repository.reconnect()` → `stop()` + `start()`, so the 
 User taps [Scan QR]
   → camera permission check
   → zxing QR scanner opens
-  → scans helm://IP:PORT
-  → Uri.parse extracts host + port
-  → DataStore.setWifiHost / setWifiPort / setMode(WIFI)
+  → scans helms://IP:PORT?token=<hex64>&cert=<sha256>
+  → Uri.parse extracts host, port, token, cert fingerprint
+  → DataStore.setWifiHost / setWifiPort / setToken / setCertFingerprint / setMode(WIFI)
   → repository.reconnect()
-  → ConnectionManager starts new WebSocket to ws://IP:PORT/helm
+  → HelmWebSocketClient.resolveParams() → scheme=wss, builds PinnedTrustManager
+  → ConnectionManager starts new WebSocket to wss://IP:PORT/helm
+      with X-Helm-Token header and cert pinning
+  → Settings card shows "Secured" badge
 ```
+
+`helm://` (no 's') QR codes are also accepted for plain WS connections (USB-equivalent trust level — use only on trusted LANs).
 
 ### mDNS Discovery Flow
 
@@ -194,9 +203,40 @@ User taps [Discover]
 
 ## Security
 
-- Agent binds `127.0.0.1` by default (loopback only)
-- WiFi mode (`0.0.0.0`) is opt-in via config
-- ADB reverse provides implicit USB-level trust
+### USB mode
+
+Agent binds `127.0.0.1` — loopback only. ADB reverse provides implicit USB-level trust. No TLS, no auth needed.
+
+### WiFi mode
+
+Three independent layers applied at connection time:
+
+```
+TCP accept
+    │
+    ▼
+[1. Rate limiter] ── ≥5 failures / 60s → drop TCP (no TLS cost)
+    │
+    ▼
+[2. TLS handshake] ── self-signed cert, client pins via SHA-256 fingerprint
+    │
+    ▼
+[3. WS upgrade + PSK token] ── wrong/missing X-Helm-Token → HTTP 401
+    │
+    ▼
+handle_connection
+```
+
+**Cert:** RSA self-signed, stored at `~/.config/helm/cert.pem` / `key.pem` (key: 0o600). Generated on first WiFi startup; 10-year validity.
+
+**Token:** 32 random bytes, hex-encoded, stored at `~/.config/helm/token` (0o600). Embedded in the `helms://` QR URL.
+
+**Android cert pinning:** `PinnedTrustManager` pins the SHA-256 fingerprint of the leaf cert — no system CA chain consulted. Fingerprint is scanned from the QR code (TOFU).
+
+**Token comparison:** Constant-time (`subtle::ConstantTimeEq`) to prevent timing oracle attacks.
+
+### General
+
 - Commands require explicit allowlist in `agent.toml`
 - Dangerous commands (reboot/shutdown/suspend) require `confirmed=true`
 - No cloud, no telemetry, no analytics, no user accounts

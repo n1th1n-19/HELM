@@ -39,6 +39,8 @@ Installs the agent binary, sets up a systemd user service, configures ADB auto-r
 - **Quick actions** — restart dev server, git pull/push, open terminal, lock screen
 - **USB sidecar** — USB connection via ADB reverse tunnel (no Wi-Fi required)
 - **WiFi sidecar** — Wireless connection with QR code pairing and mDNS auto-discovery
+- **WiFi security** — TLS encryption + PSK token auth; cert pinning on Android (no CA required)
+- **System tray** — right-click menu: connection status, stop, restart
 - **Local-first** — no cloud, no accounts, no telemetry
 - **Kiosk mode** — fullscreen, landscape lock, keep screen on, boot autostart
 
@@ -51,16 +53,16 @@ Installs the agent binary, sets up a systemd user service, configures ADB auto-r
 │   Android Device    │◄──────────────────►│  Desktop Agent       │
 │   (Kotlin/Compose)  │  ws://localhost     │  (Rust/Tokio)        │
 │                     │      :9090  (USB)   │                      │
-│  • 7-tab dashboard  │  ws://LAN_IP:9090  │  • System metrics    │
-│  • Responsive UI    │       (WiFi)        │  • Git collector     │
-│  • USB + WiFi conn  │                     │  • MPRIS2 music      │
+│  • 7-tab dashboard  │  wss://LAN_IP:9090 │  • System metrics    │
+│  • Responsive UI    │  + TLS + PSK token  │  • Git collector     │
+│  • USB + WiFi conn  │       (WiFi)        │  • MPRIS2 music      │
 │  • QR pairing       │  adb reverse        │  • VS Code workspace │
 │  • mDNS discovery   │  tcp:9090 tcp:9090  │  • Window detection  │
 │  • Kiosk mode       │  (auto-maintained)  │  • Command executor  │
 └─────────────────────┘                     └──────────────────────┘
 ```
 
-The desktop agent collects system data and pushes delta updates to the Android client over WebSocket. Connect via USB (zero-config) or WiFi (scan QR code).
+The desktop agent collects system data and pushes delta updates to the Android client over WebSocket. USB mode is zero-config plaintext (loopback-safe). WiFi mode uses TLS + PSK token auth — the QR code carries the cert fingerprint and token for one-scan pairing.
 
 ---
 
@@ -111,8 +113,8 @@ adb install android/app/build/outputs/apk/debug/app-debug.apk
 
 **WiFi:**
 1. Set `bind_host = "0.0.0.0"` in `~/.config/helm/agent.toml`
-2. Restart agent — a QR code prints in the terminal
-3. Open HELM on Android → Settings tab → Scan QR
+2. Restart agent — a `helms://` QR code prints in the terminal (includes cert fingerprint + PSK token)
+3. Open HELM on Android → Settings tab → Scan QR → connection is automatically TLS-secured
 
 ---
 
@@ -212,6 +214,22 @@ helm/
 - [ ] Wayland active window support (wlr-foreign-toplevel / KDE DBus)
 - [ ] Plugin system (Docker, Kubernetes, GitHub, GitLab, Ollama, Claude Code)
 - [ ] macOS agent support
+
+---
+
+## Uninstall
+
+```bash
+bash uninstall.sh
+```
+
+Or:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/uninstall.sh | bash
+```
+
+Stops the service, removes the binary, config dir (certs, token, `agent.toml`), systemd unit, udev rule, and firewall rule.
 
 ---
 
