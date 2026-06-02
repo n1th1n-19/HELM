@@ -10,6 +10,7 @@ import dev.helm.app.data.nsd.NsdDiscovery
 import dev.helm.app.data.prefs.ConnectionMode
 import dev.helm.app.data.prefs.ConnectionPreferences
 import dev.helm.app.data.repository.HelmRepository
+import dev.helm.app.data.websocket.ConnectionState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,8 @@ data class SettingsUiState(
     val wifiPort: Int = ConnectionPreferences.DEFAULT_PORT,
     val discovered: List<DiscoveredAgent> = emptyList(),
     val isDiscovering: Boolean = false,
+    val connectionState: ConnectionState = ConnectionState.Disconnected,
+    val lastError: String? = null,
 )
 
 @HiltViewModel
@@ -42,13 +45,19 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             combine(prefs.mode, prefs.wifiHost, prefs.wifiPort) { mode, host, port ->
-                SettingsUiState(mode = mode, wifiHost = host, wifiPort = port)
-            }.collect { base ->
-                _state.value = _state.value.copy(
-                    mode = base.mode,
-                    wifiHost = base.wifiHost,
-                    wifiPort = base.wifiPort,
-                )
+                Triple(mode, host, port)
+            }.collect { (mode, host, port) ->
+                _state.value = _state.value.copy(mode = mode, wifiHost = host, wifiPort = port)
+            }
+        }
+        viewModelScope.launch {
+            repository.connectionState.collect { cs ->
+                _state.value = _state.value.copy(connectionState = cs)
+            }
+        }
+        viewModelScope.launch {
+            repository.lastError.collect { err ->
+                _state.value = _state.value.copy(lastError = err)
             }
         }
     }

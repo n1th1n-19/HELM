@@ -1,5 +1,6 @@
 package dev.helm.app.data.websocket
 
+import android.util.Log
 import dev.helm.app.data.model.HelmEnvelope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +18,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val TAG = "HelmConnection"
+
 enum class ConnectionState { Disconnected, Connecting, Connected, Reconnecting }
 
 @Singleton
@@ -27,6 +30,9 @@ class ConnectionManager @Inject constructor(
 
     private val _connectionState = MutableStateFlow(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     // SharedFlow so rapid-fire messages are not dropped (StateFlow only keeps latest).
     private val _messages = MutableSharedFlow<HelmEnvelope>(extraBufferCapacity = 64)
@@ -62,6 +68,7 @@ class ConnectionManager @Inject constructor(
                 client.connect().collect { envelope ->
                     if (!sessionOpen) {
                         _connectionState.value = ConnectionState.Connected
+                        _lastError.value = null
                         attempt = 0
                         sessionOpen = true
                     }
@@ -71,7 +78,9 @@ class ConnectionManager @Inject constructor(
             } catch (e: CancellationException) {
                 throw e // always rethrow — cancellation must propagate
             } catch (e: Exception) {
-                // Connection failed — will retry after backoff
+                val msg = e.message ?: e.javaClass.simpleName
+                _lastError.value = msg
+                Log.w(TAG, "connection failed: $msg")
             }
             if (_connectionState.value == ConnectionState.Connected) {
                 _connectionState.value = ConnectionState.Reconnecting

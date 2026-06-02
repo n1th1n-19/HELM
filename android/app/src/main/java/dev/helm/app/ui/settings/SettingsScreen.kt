@@ -1,18 +1,21 @@
 package dev.helm.app.ui.settings
 
 import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.Wifi
+import dev.helm.app.data.websocket.ConnectionState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,16 +39,35 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
 
     var hostInput by remember(state.wifiHost) { mutableStateOf(state.wifiHost) }
     var portInput by remember(state.wifiPort) { mutableStateOf(state.wifiPort.toString()) }
 
-    val cameraPermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* permission result handled by qrLauncher on next call */ }
+    val scanOptions = remember {
+        ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            setPrompt("Scan HELM pairing QR code")
+            setBeepEnabled(false)
+            setOrientationLocked(false)
+        }
+    }
 
     val qrLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let { viewModel.handleQrResult(it) }
+    }
+
+    val cameraPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) qrLauncher.launch(scanOptions)
+    }
+
+    fun launchQrScanner() {
+        val hasPerm = context.checkSelfPermission(Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        if (hasPerm) qrLauncher.launch(scanOptions)
+        else cameraPermLauncher.launch(Manifest.permission.CAMERA)
     }
 
     LazyColumn(
@@ -82,12 +104,22 @@ fun SettingsScreen(
                         }
                     }
 
-                    if (state.mode == ConnectionMode.USB) {
-                        Text(
-                            text = "Connect via: adb forward tcp:8080 tcp:8080",
-                            color = HelmTextTertiary,
-                            fontSize = 11.sp,
-                        )
+                    val targetUrl = if (state.mode == ConnectionMode.WIFI && state.wifiHost.isNotBlank())
+                        "ws://${state.wifiHost}:${state.wifiPort}/helm"
+                    else
+                        "ws://localhost:${state.wifiPort}/helm (USB)"
+                    Text("Target: $targetUrl", color = HelmTextTertiary, fontSize = 10.sp)
+
+                    val (statusColor, statusText) = when (state.connectionState) {
+                        ConnectionState.Connected    -> HelmSuccess to "Connected"
+                        ConnectionState.Connecting   -> HelmWarning to "Connecting..."
+                        ConnectionState.Reconnecting -> HelmWarning to "Reconnecting..."
+                        ConnectionState.Disconnected -> HelmError   to "Disconnected"
+                    }
+                    Text(statusText, color = statusColor, fontSize = 11.sp)
+
+                    state.lastError?.let { err ->
+                        Text("Error: $err", color = HelmError, fontSize = 10.sp)
                     }
                 }
             }
@@ -143,17 +175,7 @@ fun SettingsScreen(
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
-                                onClick = {
-                                    cameraPermLauncher.launch(Manifest.permission.CAMERA)
-                                    qrLauncher.launch(
-                                        ScanOptions().apply {
-                                            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                            setPrompt("Scan HELM pairing QR code")
-                                            setBeepEnabled(false)
-                                            setOrientationLocked(false)
-                                        }
-                                    )
-                                },
+                                onClick = { launchQrScanner() },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = HelmNetwork),
                                 border = BorderStroke(1.dp, HelmBorder),

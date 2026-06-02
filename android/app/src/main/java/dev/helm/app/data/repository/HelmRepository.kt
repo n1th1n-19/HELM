@@ -41,6 +41,7 @@ class HelmRepository @Inject constructor(
     val state: StateFlow<HelmState> = _state.asStateFlow()
 
     val connectionState: StateFlow<ConnectionState> = connectionManager.connectionState
+    val lastError: StateFlow<String?> = connectionManager.lastError
 
     init {
         scope.launch {
