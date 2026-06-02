@@ -20,8 +20,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,7 +44,6 @@ class HelmRepository @Inject constructor(
     init {
         scope.launch {
             connectionManager.messages.collect { envelope ->
-                envelope ?: return@collect
                 _state.value = applyDelta(_state.value, envelope)
             }
         }
@@ -50,13 +53,13 @@ class HelmRepository @Inject constructor(
     fun disconnect() = connectionManager.stop()
 
     suspend fun sendCommand(command: HelmCommand) {
-        val envelope = buildString {
-            append("""{"type":"command","ts":""")
-            append(System.currentTimeMillis())
-            append(""","payload":""")
-            append(Json.encodeToString(HelmCommand.serializer(), command))
-            append("}")
-        }
+        val envelope = json.encodeToString(
+            buildJsonObject {
+                put("type", "command")
+                put("ts", System.currentTimeMillis())
+                put("payload", json.encodeToJsonElement(command))
+            }
+        )
         connectionManager.send(envelope)
     }
 
@@ -93,7 +96,10 @@ class HelmRepository @Inject constructor(
                 }
                 "command_ack" -> {
                     val ack = json.decodeFromJsonElement<CommandAck>(envelope.payload)
-                    current.copy(commandAcks = current.commandAcks + (ack.id to ack))
+                    // Cap at 50 entries to prevent unbounded growth.
+                    val updated = (current.commandAcks + (ack.id to ack))
+                        .let { map -> if (map.size > 50) map.entries.drop(map.size - 50).associate { it.toPair() } else map }
+                    current.copy(commandAcks = updated)
                 }
                 else -> current
             }

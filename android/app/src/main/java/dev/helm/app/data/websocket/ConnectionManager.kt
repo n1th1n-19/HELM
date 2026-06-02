@@ -1,13 +1,17 @@
 package dev.helm.app.data.websocket
 
 import dev.helm.app.data.model.HelmEnvelope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -24,8 +28,9 @@ class ConnectionManager @Inject constructor(
     private val _connectionState = MutableStateFlow(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _messages = MutableStateFlow<HelmEnvelope?>(null)
-    val messages: StateFlow<HelmEnvelope?> = _messages.asStateFlow()
+    // SharedFlow so rapid-fire messages are not dropped (StateFlow only keeps latest).
+    private val _messages = MutableSharedFlow<HelmEnvelope>(extraBufferCapacity = 64)
+    val messages: SharedFlow<HelmEnvelope> = _messages.asSharedFlow()
 
     private var connectJob: Job? = null
 
@@ -52,20 +57,27 @@ class ConnectionManager @Inject constructor(
             _connectionState.value = if (attempt == 0) ConnectionState.Connecting
                                      else ConnectionState.Reconnecting
             try {
+                // Mark Connected as soon as the session opens, before first message.
+                var sessionOpen = false
                 client.connect().collect { envelope ->
-                    _connectionState.value = ConnectionState.Connected
-                    attempt = 0 // reset on successful message
-                    _messages.value = envelope
+                    if (!sessionOpen) {
+                        _connectionState.value = ConnectionState.Connected
+                        attempt = 0
+                        sessionOpen = true
+                    }
+                    _messages.tryEmit(envelope)
                 }
                 // Flow completed normally (server closed connection)
+            } catch (e: CancellationException) {
+                throw e // always rethrow — cancellation must propagate
             } catch (e: Exception) {
-                // Connection failed — will retry
+                // Connection failed — will retry after backoff
             }
             if (_connectionState.value == ConnectionState.Connected) {
                 _connectionState.value = ConnectionState.Reconnecting
             }
             val delayMs = backoffDelays.getOrElse(attempt) { backoffDelays.last() }
-            attempt = (attempt + 1).coerceAtMost(backoffDelays.size)
+            attempt = (attempt + 1).coerceAtMost(backoffDelays.lastIndex)
             delay(delayMs)
         }
     }
