@@ -1,0 +1,42 @@
+name: Auto PR — main → prod
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=$(grep '^version' agent/Cargo.toml | head -1 | cut -d'"' -f2)" >> $GITHUB_OUTPUT
+
+      - name: Create PR if not exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list --base prod --head main --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open — skipping"
+          else
+            gh pr create \
+              --base prod \
+              --head main \
+              --title "release: v${{ steps.version.outputs.version }}" \
+              --body "## v${{ steps.version.outputs.version }}
+
+Merging this PR will trigger the release workflow and publish \`v${{ steps.version.outputs.version }}\` to GitHub Releases.
+
+**Checklist:**
+- [ ] Version bumped in \`agent/Cargo.toml\` and \`android/app/build.gradle.kts\`
+- [ ] Tested on device
+- [ ] Changelog reviewed"
+          fi
