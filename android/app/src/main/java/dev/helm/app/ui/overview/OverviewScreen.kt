@@ -102,6 +102,10 @@ fun OverviewScreen(
                         terminal = state.terminal,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
+                    AccountUsageCard(
+                        account = state.account,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
                 }
             }
         }
@@ -694,6 +698,78 @@ fun TerminalStatusCard(terminal: TerminalStatus, modifier: Modifier = Modifier) 
                     )
                 }
             }
+        }
+    }
+}
+
+// ── Account Usage Card ────────────────────────────────────────────────────────
+
+@Composable
+fun AccountUsageCard(account: AccountUpdate, modifier: Modifier = Modifier) {
+    HelmCard(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(12.dp).fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CardLabel("USAGE")
+
+            account.plan?.let { plan ->
+                Text(plan, color = HelmClaude, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            UsageMeter(
+                label = "Session",
+                pct = account.sessionUsedPct,
+                resetSecs = account.sessionResetSecs,
+            )
+            UsageMeter(
+                label = "Weekly",
+                pct = account.weeklyUsedPct,
+                resetSecs = account.weeklyResetSecs,
+            )
+
+            if (account.sessionUsedPct == null && account.weeklyUsedPct == null) {
+                Text(
+                    "Waiting for\nrate limit data",
+                    color = HelmTextTertiary,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageMeter(label: String, pct: Float?, resetSecs: Long?) {
+    if (pct == null) return
+    val color = if (pct > 80f) HelmWarning else HelmClaude
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = HelmTextTertiary, fontSize = 9.sp)
+            Text("${pct.toInt()}%", color = color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        }
+        LinearProgressIndicator(
+            progress = { (pct / 100f).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(4.dp),
+            color = color,
+            trackColor = HelmBorder,
+        )
+        resetSecs?.let { secs ->
+            val h = secs / 3600
+            val m = (secs % 3600) / 60
+            val label2 = when {
+                h > 0 -> "~${h}h"
+                m > 0 -> "~${m}m"
+                else -> "<1m"
+            }
+            Text("Resets $label2", color = HelmTextTertiary, fontSize = 9.sp)
         }
     }
 }
