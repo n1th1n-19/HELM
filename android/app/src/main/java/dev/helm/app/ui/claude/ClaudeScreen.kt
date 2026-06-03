@@ -2,6 +2,8 @@ package dev.helm.app.ui.claude
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -38,16 +40,16 @@ fun ClaudeScreen(
     ) {
         // Left panel — stats and context
         Column(
-            modifier = Modifier.weight(4f).fillMaxHeight(),
+            modifier = Modifier.weight(4f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ClaudeStatusPanel(claude = claude, modifier = Modifier.weight(1f).fillMaxWidth())
-            ClaudeContextPanel(claude = claude, modifier = Modifier.weight(1f).fillMaxWidth())
+            ClaudeStatusPanel(claude = claude, modifier = Modifier.fillMaxWidth())
+            ClaudeContextPanel(claude = claude, modifier = Modifier.fillMaxWidth())
         }
 
-        // Right panel — task, file info, account usage
+        // Right panel — task and session info
         Column(
-            modifier = Modifier.weight(8f).fillMaxHeight(),
+            modifier = Modifier.weight(8f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ClaudeTaskPanel(claude = claude, modifier = Modifier.fillMaxWidth())
@@ -64,7 +66,7 @@ private fun ClaudeStatusPanel(claude: ClaudeUpdate, modifier: Modifier = Modifie
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxSize(),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ScreenLabel("STATUS")
@@ -90,7 +92,7 @@ private fun ClaudeStatusPanel(claude: ClaudeUpdate, modifier: Modifier = Modifie
                 )
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
 
             // Token usage
             StatRow("Tokens Used", claude.tokensUsed?.let { formatTokens(it) } ?: "--")
@@ -106,7 +108,7 @@ private fun ClaudeContextPanel(claude: ClaudeUpdate, modifier: Modifier = Modifi
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxSize(),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ScreenLabel("CONTEXT USAGE")
