@@ -37,6 +37,12 @@ use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Install ring as the rustls crypto provider before any TLS code runs.
+    // Required when multiple crates depend on rustls without agreeing on a backend.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .ok(); // ok() — harmless if already installed
+
     let args = cli::Cli::parse();
     let cfg = config::load_config()?;
 
