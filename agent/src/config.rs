@@ -44,7 +44,7 @@ pub struct PollIntervals {
 }
 
 fn default_port() -> u16 {
-    8080
+    9090
 }
 fn default_bind_host() -> String {
     "127.0.0.1".to_string()
