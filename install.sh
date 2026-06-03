@@ -57,6 +57,30 @@ if [ "$ARCH" = "x86_64" ]; then
   done
 fi
 
+# ── Migrate from old versions ────────────────────────────────────────────────
+# v0.4.x and earlier used port 8080 as the default and the binary was called
+# helm-agent before being renamed to helm. Clean all of that up so old installs
+# don't leave orphaned processes or stale config blocking the fresh install.
+OLD_PORT=8080
+OLD_PORT_HEX=$(printf '%04X' "$OLD_PORT")
+OLD_INODE=$(awk -v p="$OLD_PORT_HEX" \
+  'NR>1 && toupper($2) ~ ":"p"$" && $4=="0A" {print $10}' \
+  /proc/net/tcp /proc/net/tcp6 2>/dev/null | head -1)
+if [ -n "$OLD_INODE" ]; then
+  OLD_PID=$(grep -rl "socket:\[$OLD_INODE\]" /proc/*/fd 2>/dev/null | head -1 | cut -d/ -f3)
+  if [ -n "$OLD_PID" ]; then
+    echo "==> Migrating: killing old agent on port $OLD_PORT (pid=$OLD_PID)..."
+    kill "$OLD_PID" 2>/dev/null || true
+    sleep 1
+    kill -9 "$OLD_PID" 2>/dev/null || true
+  fi
+fi
+# If config exists with old default port, update it to the current port.
+if [ -f "$CONFIG_DIR/agent.toml" ] && grep -q "port\s*=\s*$OLD_PORT" "$CONFIG_DIR/agent.toml" 2>/dev/null; then
+  echo "==> Migrating: updating config port $OLD_PORT → $PORT..."
+  sed -i "s/port\s*=\s*$OLD_PORT/port = $PORT/" "$CONFIG_DIR/agent.toml"
+fi
+
 # ── Stop any running instance before replacing the binary ────────────────────
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
