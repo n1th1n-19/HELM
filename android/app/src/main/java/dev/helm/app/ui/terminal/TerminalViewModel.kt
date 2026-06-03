@@ -48,6 +48,7 @@ class TerminalViewModel @Inject constructor(
                 action = action,
                 args = if (args.isEmpty()) null else args,
             )
+            repository.startCommand(action.displayName())
             try {
                 repository.sendCommand(cmd)
             } catch (e: Exception) {
@@ -68,4 +69,16 @@ class TerminalViewModel @Inject constructor(
             _isExecuting.value = false
         }
     }
+}
+
+private fun CommandAction.displayName(): String = when (this) {
+    CommandAction.RestartDevServer -> "Restart Dev Server"
+    CommandAction.GitPull          -> "Git Pull"
+    CommandAction.GitPush          -> "Git Push"
+    CommandAction.OpenTerminal     -> "Open Terminal"
+    CommandAction.OpenProject      -> "Open Project"
+    CommandAction.Lock             -> "Lock Screen"
+    CommandAction.Suspend          -> "Suspend"
+    CommandAction.Reboot           -> "Reboot"
+    CommandAction.Shutdown         -> "Shutdown"
 }

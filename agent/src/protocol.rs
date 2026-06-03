@@ -150,6 +150,15 @@ pub struct ClaudeUpdate {
     pub tokens_max: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_percent: Option<f32>,
+    // Account-level cumulative usage (scanned from ~/.claude/projects/).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_output_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_cache_creation_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_cache_read_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_sessions: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -211,6 +220,37 @@ pub struct Command {
     pub action: CommandAction,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub args: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AccountUpdate {
+    // Static account info (from ~/.claude/.credentials.json)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_limit_tier: Option<String>,
+
+    // Subscription rate limit usage (from API response headers)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_used_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_reset_secs: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weekly_used_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weekly_reset_secs: Option<i64>,
+
+    // Local activity (from ~/.claude/stats-cache.json)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub today_messages: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub today_sessions: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub week_messages: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub week_sessions: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

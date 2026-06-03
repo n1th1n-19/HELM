@@ -14,6 +14,7 @@ pub struct HelmState {
     pub claude: ClaudeUpdate,
     pub process: ProcessUpdate,
     pub system_info: Option<SystemInfo>,
+    pub account: AccountUpdate,
 }
 
 pub type SharedState = Arc<RwLock<HelmState>>;

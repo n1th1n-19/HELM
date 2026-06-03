@@ -54,55 +54,111 @@ fun OverviewScreen(
             onReconnect = viewModel::reconnect,
         )
         Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        when (windowWidthSizeClass) {
+            WindowWidthSizeClass.Compact  -> OverviewCompact(state, Modifier.weight(1f).fillMaxWidth())
+            WindowWidthSizeClass.Medium   -> OverviewMedium(state, Modifier.weight(1f).fillMaxWidth())
+            else                          -> OverviewExpanded(state, Modifier.weight(1f).fillMaxWidth())
+        }
+    }
+}
+
+// ── Compact (<600dp) — single scrollable column ───────────────────────────────
+
+@Composable
+private fun OverviewCompact(state: dev.helm.app.data.model.HelmState, modifier: Modifier = Modifier) {
+    val w = Modifier.fillMaxWidth()
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SystemCard(system = state.system, modifier = w)
+        ClaudeCard(claude = state.claude, modifier = w)
+        GitCard(git = state.git, modifier = w)
+        DevelopmentCard(vscode = state.vscode, git = state.git, modifier = w)
+        MediaCard(music = state.music, modifier = w)
+        AccountUsageCard(account = state.account, modifier = w)
+        EventsCard(events = state.events, modifier = w)
+        RecentCommitsCard(commits = state.git.commits ?: emptyList(), modifier = w)
+        TerminalStatusCard(terminal = state.terminal, modifier = w)
+    }
+}
+
+// ── Medium (600–840dp) — two equal columns, each scrollable ──────────────────
+
+@Composable
+private fun OverviewMedium(state: dev.helm.app.data.model.HelmState, modifier: Modifier = Modifier) {
+    val w = Modifier.fillMaxWidth()
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Left column — System + Git
-            Column(
-                modifier = Modifier.weight(3f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SystemCard(system = state.system, modifier = Modifier.weight(1f).fillMaxWidth())
-                GitCard(git = state.git, modifier = Modifier.weight(1f).fillMaxWidth())
-            }
+            SystemCard(system = state.system, modifier = w)
+            GitCard(git = state.git, modifier = w)
+            DevelopmentCard(vscode = state.vscode, git = state.git, modifier = w)
+            AccountUsageCard(account = state.account, modifier = w)
+        }
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ClaudeCard(claude = state.claude, modifier = w)
+            MediaCard(music = state.music, modifier = w)
+            EventsCard(events = state.events, modifier = w)
+            RecentCommitsCard(commits = state.git.commits ?: emptyList(), modifier = w)
+            TerminalStatusCard(terminal = state.terminal, modifier = w)
+        }
+    }
+}
 
-            // Middle column — Development + Media
-            Column(
-                modifier = Modifier.weight(3f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                DevelopmentCard(
-                    vscode = state.vscode,
-                    git = state.git,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-                MediaCard(music = state.music, modifier = Modifier.weight(1f).fillMaxWidth())
-            }
+// ── Expanded (>840dp) — three columns, fixed height ──────────────────────────
 
-            // Right column — Claude (dominant) + bottom row
-            Column(
-                modifier = Modifier.weight(6f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+@Composable
+private fun OverviewExpanded(state: dev.helm.app.data.model.HelmState, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Left column — System + Git
+        Column(
+            modifier = Modifier.weight(3f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SystemCard(system = state.system, modifier = Modifier.weight(1f).fillMaxWidth())
+            GitCard(git = state.git, modifier = Modifier.weight(1f).fillMaxWidth())
+        }
+
+        // Middle column — Development + Media
+        Column(
+            modifier = Modifier.weight(3f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DevelopmentCard(vscode = state.vscode, git = state.git, modifier = Modifier.weight(1f).fillMaxWidth())
+            MediaCard(music = state.music, modifier = Modifier.weight(1f).fillMaxWidth())
+        }
+
+        // Right column — Claude (dominant) + 2×2 bottom grid
+        Column(
+            modifier = Modifier.weight(6f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ClaudeCard(claude = state.claude, modifier = Modifier.weight(5f).fillMaxWidth())
+            Row(
+                modifier = Modifier.weight(2f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ClaudeCard(claude = state.claude, modifier = Modifier.weight(5f).fillMaxWidth())
-                Row(
-                    modifier = Modifier.weight(3f).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    EventsCard(
-                        events = state.events,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    RecentCommitsCard(
-                        commits = state.git.commits ?: emptyList(),
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    TerminalStatusCard(
-                        terminal = state.terminal,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                }
+                EventsCard(events = state.events, modifier = Modifier.weight(1f).fillMaxHeight())
+                RecentCommitsCard(commits = state.git.commits ?: emptyList(), modifier = Modifier.weight(1f).fillMaxHeight())
+            }
+            Row(
+                modifier = Modifier.weight(2f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TerminalStatusCard(terminal = state.terminal, modifier = Modifier.weight(1f).fillMaxHeight())
+                AccountUsageCard(account = state.account, modifier = Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
@@ -694,6 +750,78 @@ fun TerminalStatusCard(terminal: TerminalStatus, modifier: Modifier = Modifier) 
                     )
                 }
             }
+        }
+    }
+}
+
+// ── Account Usage Card ────────────────────────────────────────────────────────
+
+@Composable
+fun AccountUsageCard(account: AccountUpdate, modifier: Modifier = Modifier) {
+    HelmCard(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(12.dp).fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CardLabel("USAGE")
+
+            account.plan?.let { plan ->
+                Text(plan, color = HelmClaude, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            UsageMeter(
+                label = "Session",
+                pct = account.sessionUsedPct,
+                resetSecs = account.sessionResetSecs,
+            )
+            UsageMeter(
+                label = "Weekly",
+                pct = account.weeklyUsedPct,
+                resetSecs = account.weeklyResetSecs,
+            )
+
+            if (account.sessionUsedPct == null && account.weeklyUsedPct == null) {
+                Text(
+                    "Waiting for\nrate limit data",
+                    color = HelmTextTertiary,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageMeter(label: String, pct: Float?, resetSecs: Long?) {
+    if (pct == null) return
+    val color = if (pct > 80f) HelmWarning else HelmClaude
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = HelmTextTertiary, fontSize = 9.sp)
+            Text("${pct.toInt()}%", color = color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        }
+        LinearProgressIndicator(
+            progress = { (pct / 100f).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(4.dp),
+            color = color,
+            trackColor = HelmBorder,
+        )
+        resetSecs?.let { secs ->
+            val h = secs / 3600
+            val m = (secs % 3600) / 60
+            val label2 = when {
+                h > 0 -> "~${h}h"
+                m > 0 -> "~${m}m"
+                else -> "<1m"
+            }
+            Text("Resets $label2", color = HelmTextTertiary, fontSize = 9.sp)
         }
     }
 }
