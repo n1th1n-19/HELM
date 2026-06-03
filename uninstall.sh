@@ -5,6 +5,7 @@
 set -euo pipefail
 
 PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+PORT=9090
 
 echo "Uninstalling HELM..."
 

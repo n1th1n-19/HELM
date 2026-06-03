@@ -8,35 +8,29 @@ use crate::config::HelmConfig;
 use crate::protocol::WindowUpdate;
 use crate::state::{SharedState, StateTx};
 use std::time::Duration;
-use tokio::process::Command;
 use tokio::time;
 
 async fn get_active_window() -> Option<WindowUpdate> {
-    // Active window title.
-    let name_output = Command::new("xdotool")
-        .args(["getactivewindow", "getwindowname"])
+    // Single atomic xdotool invocation to avoid mixing title/class from different
+    // windows if the active window changes between two separate calls.
+    // Output: window-id\ntitle\nclassname\n
+    let output = tokio::process::Command::new("xdotool")
+        .args(["getactivewindow", "getwindowname", "getwindowclassname"])
         .output()
         .await
         .ok()?;
-    if !name_output.status.success() {
+    if !output.status.success() {
         return None; // Wayland, no active window, or xdotool not installed.
     }
-    let window_title = String::from_utf8_lossy(&name_output.stdout)
-        .trim()
-        .to_string();
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let _window_id = lines.next()?;
+    let window_title = lines.next()?.to_string();
+    let app_name = lines.next().unwrap_or("").to_string();
 
-    // Window class name.
-    let class_output = Command::new("xdotool")
-        .args(["getactivewindow", "getwindowclassname"])
-        .output()
-        .await
-        .ok()?;
-    let app_name = String::from_utf8_lossy(&class_output.stdout)
-        .trim()
-        .to_string();
-
-    // Current desktop / workspace number.
-    let desktop_output = Command::new("xdotool")
+    // Current desktop / workspace number (separate call is fine — it has no
+    // per-window ambiguity).
+    let desktop_output = tokio::process::Command::new("xdotool")
         .args(["get_desktop"])
         .output()
         .await

@@ -113,7 +113,11 @@ impl Default for HelmConfig {
 }
 
 pub fn config_path() -> PathBuf {
-    let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"));
+    let base = dirs::config_dir().unwrap_or_else(|| {
+        dirs::home_dir()
+            .map(|h| h.join(".config"))
+            .unwrap_or_else(|| PathBuf::from("/tmp/helm-config"))
+    });
     base.join("helm").join("agent.toml")
 }
 

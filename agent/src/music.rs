@@ -122,17 +122,41 @@ async fn get_music_update(conn: &Connection) -> Option<MusicUpdate> {
 /// Maximum album art file size we are willing to base64-encode (500 KB).
 const MAX_ART_BYTES: u64 = 500 * 1024;
 
+/// Percent-decode a URI path component (handles all `%XX` sequences).
+fn percent_decode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(hex_str) = std::str::from_utf8(&bytes[i + 1..i + 3]) {
+                if let Ok(byte) = u8::from_str_radix(hex_str, 16) {
+                    out.push(byte as char);
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
 /// Read a local `file://` art URL, detect JPEG/PNG via magic bytes, and return
 /// a base64-encoded data-URI string.  Returns `None` for HTTP(S) URLs, files
 /// that are too large, or unrecognised formats.
 fn encode_album_art(art_url: &str) -> Option<String> {
-    // Only handle local files for now.
-    let path = if let Some(stripped) = art_url.strip_prefix("file://") {
-        stripped.to_string()
+    // Only handle local files for now. Handle file://localhost/path and file:///path.
+    let raw_path = if art_url.starts_with("file://localhost") {
+        art_url.strip_prefix("file://localhost")?
+    } else if let Some(stripped) = art_url.strip_prefix("file://") {
+        stripped
     } else {
         // http/https — skip without logging (expected).
         return None;
     };
+    let path = percent_decode(raw_path);
 
     let meta = std::fs::metadata(&path).ok()?;
     if meta.len() > MAX_ART_BYTES {
