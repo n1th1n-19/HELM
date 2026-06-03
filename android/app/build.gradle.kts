@@ -15,8 +15,8 @@ android {
         applicationId = "dev.helm.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.4.3"
+        versionCode = 9
+        versionName = "0.4.5"
     }
 
     signingConfigs {
