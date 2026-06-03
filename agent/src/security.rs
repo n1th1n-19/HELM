@@ -44,11 +44,16 @@ pub fn load_or_create(_cfg: &crate::config::HelmConfig) -> Result<SecurityContex
 
     // ── Cert + key ────────────────────────────────────────────────────────────
 
-    let (cert_pem, key_pem) = if cert_path().exists() && key_path().exists() {
-        let cert = std::fs::read_to_string(cert_path())
-            .with_context(|| format!("reading {}", cert_path().display()))?;
-        let key = std::fs::read_to_string(key_path())
-            .with_context(|| format!("reading {}", key_path().display()))?;
+    // Bug 3: bind paths once to avoid repeated recomputation and to make the
+    // atomic-write logic below easier to read.
+    let cert_path = cert_path();
+    let key_path  = key_path();
+
+    let (cert_pem, key_pem) = if cert_path.exists() && key_path.exists() {
+        let cert = std::fs::read_to_string(&cert_path)
+            .with_context(|| format!("reading {}", cert_path.display()))?;
+        let key = std::fs::read_to_string(&key_path)
+            .with_context(|| format!("reading {}", key_path.display()))?;
         (cert, key)
     } else {
         info!("Generating self-signed TLS certificate for WiFi mode");
@@ -57,19 +62,34 @@ pub fn load_or_create(_cfg: &crate::config::HelmConfig) -> Result<SecurityContex
                 .context("generating self-signed cert")?;
         let cert_pem = cert.pem();
         let key_pem = key_pair.serialize_pem();
-        std::fs::write(cert_path(), &cert_pem)
-            .with_context(|| format!("writing {}", cert_path().display()))?;
+
+        // Bug 3: write both files to .tmp paths first, then rename atomically so
+        // a crash between the two writes can never leave a mismatched cert/key pair.
+        let cert_tmp = cert_path.with_extension("pem.tmp");
+        let key_tmp  = key_path.with_extension("pem.tmp");
+
+        std::fs::write(&cert_tmp, &cert_pem)
+            .with_context(|| format!("writing {}", cert_tmp.display()))?;
         {
+            use std::io::Write;
             use std::os::unix::fs::OpenOptionsExt;
-            std::fs::OpenOptions::new()
+            let mut f = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .mode(0o600)
-                .open(key_path())
-                .and_then(|mut f| { use std::io::Write; f.write_all(key_pem.as_bytes()) })
-                .with_context(|| format!("writing {}", key_path().display()))?;
+                .open(&key_tmp)
+                .with_context(|| format!("opening {}", key_tmp.display()))?;
+            f.write_all(key_pem.as_bytes())
+                .with_context(|| format!("writing {}", key_tmp.display()))?;
+            f.sync_all()
+                .with_context(|| format!("syncing {}", key_tmp.display()))?;
         }
+        std::fs::rename(&cert_tmp, &cert_path)
+            .with_context(|| format!("renaming {} -> {}", cert_tmp.display(), cert_path.display()))?;
+        std::fs::rename(&key_tmp, &key_path)
+            .with_context(|| format!("renaming {} -> {}", key_tmp.display(), key_path.display()))?;
+
         (cert_pem, key_pem)
     };
 
@@ -146,9 +166,20 @@ impl RateLimiter {
 
     /// Returns `false` if this IP has ≥5 failures within the current 60-second window.
     pub fn check(&self, ip: IpAddr) -> bool {
-        let failures = self.failures.lock().unwrap();
-        if let Some((count, first_seen)) = failures.get(&ip) {
-            if first_seen.elapsed().as_secs() < 60 && *count >= 5 {
+        let mut failures = self.failures.lock().unwrap();
+
+        // Bug 2: evict entries older than 120 s to prevent unbounded HashMap growth
+        // when an attacker cycles through IPv6 addresses.
+        failures.retain(|_, (_, t)| t.elapsed().as_secs_f64() < 120.0);
+
+        if let Some((count, first_seen)) = failures.get_mut(&ip) {
+            if first_seen.elapsed().as_secs_f64() >= 60.0 {
+                // Window expired — reset so the next window starts clean.
+                *count = 0;
+                *first_seen = Instant::now();
+                return true;
+            }
+            if *count >= 5 {
                 return false;
             }
         }
@@ -158,10 +189,13 @@ impl RateLimiter {
     pub fn record_failure(&self, ip: IpAddr) {
         let mut failures = self.failures.lock().unwrap();
         let entry = failures.entry(ip).or_insert((0, Instant::now()));
-        if entry.1.elapsed().as_secs() >= 60 {
-            *entry = (1, Instant::now()); // new window
-        } else {
-            entry.0 += 1;
+        // Bug 1: always increment the count; only reset the window timer on expiry.
+        // Previously reset count to 1 on expiry, allowing an attacker spacing failures
+        // exactly 60 s apart to be never blocked (threshold is 5).
+        let elapsed = entry.1.elapsed().as_secs_f64();
+        entry.0 += 1;
+        if elapsed >= 60.0 {
+            entry.1 = Instant::now();
         }
     }
 

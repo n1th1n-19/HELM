@@ -84,4 +84,7 @@ dependencies {
 
     // QR code scanning
     implementation(libs.zxing.android.embedded)
+
+    // Encrypted storage for sensitive prefs (PSK token, cert fingerprint)
+    implementation(libs.security.crypto)
 }

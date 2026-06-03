@@ -18,15 +18,28 @@ use tracing::{debug, warn};
 
 fn collect_git(repo_path: String) -> anyhow::Result<GitUpdate> {
     let repo = Repository::discover(&repo_path)?;
-    let workdir = repo
-        .workdir()
-        .ok_or_else(|| anyhow::anyhow!("bare repo"))?;
-    let repo_name = workdir
+    // For linked worktrees, repo.path() returns .git/worktrees/<name>/.
+    // Walk up three parents (.git/worktrees/<name>/ -> .git/worktrees/ ->
+    // .git/ -> main workdir) to get the canonical project root.
+    let work_dir = if repo.is_worktree() {
+        repo.path()
+            .parent() // .git/worktrees/
+            .and_then(|p| p.parent()) // .git/
+            .and_then(|p| p.parent()) // main workdir
+            .unwrap_or_else(|| repo.workdir().unwrap_or(Path::new("")))
+    } else {
+        repo.workdir().ok_or_else(|| anyhow::anyhow!("bare repo"))?
+    };
+    let repo_name = work_dir
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown")
         .to_string();
-    let repo_path_str = workdir.to_string_lossy().to_string();
+    // repo_path_str still uses the actual workdir (which may be the worktree dir).
+    let actual_workdir = repo
+        .workdir()
+        .ok_or_else(|| anyhow::anyhow!("bare repo"))?;
+    let repo_path_str = actual_workdir.to_string_lossy().to_string();
 
     // Branch
     let head = repo.head()?;
@@ -118,7 +131,7 @@ fn get_tracking_info(
         Err(_) => return Ok((None, Some(0), Some(0))),
     };
     let upstream_name = upstream.name()?.map(|s| s.to_string());
-    let local_oid = repo.head()?.target().unwrap_or_else(git2::Oid::zero);
+    let local_oid = branch.get().target().unwrap_or_else(git2::Oid::zero);
     let upstream_oid = upstream.get().target().unwrap_or_else(git2::Oid::zero);
     let (ahead, behind) = repo.graph_ahead_behind(local_oid, upstream_oid)?;
     Ok((upstream_name, Some(ahead as i32), Some(behind as i32)))

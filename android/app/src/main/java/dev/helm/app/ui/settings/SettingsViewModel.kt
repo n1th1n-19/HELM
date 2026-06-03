@@ -137,10 +137,14 @@ class SettingsViewModel @Inject constructor(
 
     fun startDiscovery() {
         if (discoveryJob?.isActive == true) return
-        _state.value = _state.value.copy(isDiscovering = true, discovered = emptyList())
         discoveryJob = viewModelScope.launch {
-            nsdDiscovery.discoverAgents(context).collect { agents ->
-                _state.value = _state.value.copy(discovered = agents)
+            _state.value = _state.value.copy(isDiscovering = true, discovered = emptyList())
+            try {
+                nsdDiscovery.discoverAgents(context).collect { agents ->
+                    _state.value = _state.value.copy(discovered = agents)
+                }
+            } finally {
+                _state.value = _state.value.copy(isDiscovering = false)
             }
         }
     }

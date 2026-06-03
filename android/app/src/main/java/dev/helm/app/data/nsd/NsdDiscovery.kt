@@ -4,9 +4,13 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.util.Log
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,26 +29,39 @@ class NsdDiscovery @Inject constructor() {
         val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
         val found = mutableMapOf<String, DiscoveredAgent>()
 
-        fun makeResolveListener(): NsdManager.ResolveListener =
-            object : NsdManager.ResolveListener {
-                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
-                    Log.w(TAG, "resolve failed for ${info.serviceName}: error $errorCode")
-                }
+        // Serial resolve queue: NsdManager only allows one in-flight resolveService call
+        // at a time (pre-API 34). Funnelling all resolve requests through a Channel
+        // ensures they execute one at a time and never race.
+        val resolveQueue = Channel<NsdServiceInfo>(Channel.UNLIMITED)
 
-                override fun onServiceResolved(info: NsdServiceInfo) {
-                    val host = info.host?.hostAddress ?: run {
-                        Log.w(TAG, "resolved ${info.serviceName} but host is null")
-                        return
-                    }
-                    Log.d(TAG, "resolved: ${info.serviceName} -> $host:${info.port}")
-                    found[info.serviceName] = DiscoveredAgent(
-                        name = info.serviceName,
-                        host = host,
-                        port = info.port,
-                    )
-                    trySend(found.values.toList())
+        launch {
+            for (serviceInfo in resolveQueue) {
+                suspendCancellableCoroutine { cont ->
+                    nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                        override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                            Log.w(TAG, "resolve failed for ${info.serviceName}: error $errorCode")
+                            cont.resume(Unit)
+                        }
+
+                        override fun onServiceResolved(info: NsdServiceInfo) {
+                            val host = info.host?.hostAddress ?: run {
+                                Log.w(TAG, "resolved ${info.serviceName} but host is null")
+                                cont.resume(Unit)
+                                return
+                            }
+                            Log.d(TAG, "resolved: ${info.serviceName} -> $host:${info.port}")
+                            found[info.serviceName] = DiscoveredAgent(
+                                name = info.serviceName,
+                                host = host,
+                                port = info.port,
+                            )
+                            trySend(found.values.toList())
+                            cont.resume(Unit)
+                        }
+                    })
                 }
             }
+        }
 
         val discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -66,8 +83,7 @@ class NsdDiscovery @Inject constructor() {
 
             override fun onServiceFound(info: NsdServiceInfo) {
                 Log.d(TAG, "found service: ${info.serviceName}")
-                // Create a fresh listener per resolve — Android rejects listener reuse.
-                nsdManager.resolveService(info, makeResolveListener())
+                resolveQueue.trySend(info)
             }
 
             override fun onServiceLost(info: NsdServiceInfo) {
@@ -80,6 +96,7 @@ class NsdDiscovery @Inject constructor() {
         nsdManager.discoverServices("_helm._tcp", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
 
         awaitClose {
+            resolveQueue.close()
             try {
                 nsdManager.stopServiceDiscovery(discoveryListener)
             } catch (_: Exception) {}

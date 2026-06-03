@@ -1427,6 +1427,7 @@ dependencies = [
  "dirs",
  "futures-util",
  "git2",
+ "gtk",
  "image",
  "libc",
  "mdns-sd",

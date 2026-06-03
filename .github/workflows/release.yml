@@ -99,20 +99,69 @@ jobs:
           path: artifacts/
           merge-multiple: true
 
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="v${{ steps.version.outputs.version }}"
+
+          # Previous tag — fall back to first commit if this is the first release
+          PREV=$(git tag --sort=-version:refname | grep -v "^${VERSION}$" | head -1)
+          if [ -z "$PREV" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV}..HEAD"
+          fi
+
+          # Collect commits grouped by conventional-commit type
+          pick() {
+            git log $RANGE --pretty=format:"%s" \
+              | grep -E "^${1}(\([^)]+\))?(!)?:" \
+              | sed -E "s/^${1}(\([^)]+\))?(!)?: //" \
+              | sed 's/^/- /'
+          }
+
+          BREAKING=$(git log $RANGE --pretty=format:"%s%n%b" | grep -i "BREAKING CHANGE" | sed 's/^/- /' || true)
+          FEATS=$(pick "feat")
+          FIXES=$(pick "fix")
+          PERF=$(pick "perf")
+          REFACTOR=$(pick "refactor")
+          CHORE=$(pick "chore|build|ci")
+
+          # Build body
+          BODY=""
+
+          if [ -n "$BREAKING" ]; then
+            BODY="${BODY}## ⚠ Breaking Changes\n${BREAKING}\n\n"
+          fi
+          if [ -n "$FEATS" ]; then
+            BODY="${BODY}## What's New\n${FEATS}\n\n"
+          fi
+          if [ -n "$FIXES" ]; then
+            BODY="${BODY}## Bug Fixes\n${FIXES}\n\n"
+          fi
+          if [ -n "$PERF" ]; then
+            BODY="${BODY}## Performance\n${PERF}\n\n"
+          fi
+          if [ -n "$REFACTOR" ]; then
+            BODY="${BODY}## Improvements\n${REFACTOR}\n\n"
+          fi
+          if [ -n "$CHORE" ]; then
+            BODY="${BODY}## Internal\n${CHORE}\n\n"
+          fi
+
+          INSTALL="## Install\n\n\`\`\`bash\ncurl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/install.sh | bash\n\`\`\`\n\nSee [setup guide](docs/setup.md) for full instructions."
+
+          # Write to file to avoid quoting issues with multiline
+          printf "${BODY}${INSTALL}" > release_notes.md
+
+          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           files: artifacts/*
-          generate_release_notes: true
-          body: |
-            ## Install
-
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/n1th1n-19/HELM/main/install.sh | bash
-            ```
-
-            See [setup guide](docs/setup.md) for full instructions.
+          body_path: ${{ steps.notes.outputs.notes_file }}
 
       - name: Bump patch version on main (prepares next release)
         run: |

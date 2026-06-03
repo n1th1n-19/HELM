@@ -52,7 +52,7 @@ class HelmWebSocketClient @Inject constructor(
         }
     }
 
-    fun connect(): Flow<HelmEnvelope> = flow {
+    fun connect(onSessionOpen: () -> Unit = {}): Flow<HelmEnvelope> = flow {
         val params = resolveParams()
         var customClient: HttpClient? = null
         val activeClient = if (params.certFingerprint != null) {
@@ -65,6 +65,7 @@ class HelmWebSocketClient @Inject constructor(
             params.token?.let { t -> headers.append("X-Helm-Token", t) }
         }
         session.set(sess)
+        onSessionOpen()
 
         try {
             for (frame in sess.incoming) {
@@ -114,9 +115,7 @@ private class PinnedTrustManager(private val expectedFingerprint: String) : X509
             .digest(chain[0].encoded)
             .joinToString("") { "%02x".format(it) }
         if (actual != expectedFingerprint) {
-            throw CertificateException(
-                "Cert fingerprint mismatch: expected $expectedFingerprint, got $actual"
-            )
+            throw CertificateException("Certificate fingerprint mismatch (got $actual)")
         }
     }
 

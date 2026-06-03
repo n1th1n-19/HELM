@@ -12,11 +12,41 @@ use std::path::Path;
 use std::time::Duration;
 use tokio::time;
 
-/// Decode a `file://` URI into a filesystem path (with minimal percent-decode
-/// for spaces, the only common case in folder names).
-fn uri_to_path(uri: &str) -> String {
-    let trimmed = uri.trim_start_matches("file://");
-    trimmed.replace("%20", " ")
+/// Percent-decode a URI path component (handles all `%XX` sequences).
+fn percent_decode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(hex_str) = std::str::from_utf8(&bytes[i + 1..i + 3]) {
+                if let Ok(byte) = u8::from_str_radix(hex_str, 16) {
+                    out.push(byte as char);
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// Decode a `file://` URI into a filesystem path, handling `file:///path`,
+/// `file://localhost/path`, and arbitrary percent-encoded characters.
+fn uri_to_path(uri: &str) -> Option<String> {
+    let rest = uri.strip_prefix("file://")?;
+    let path_str = if rest.starts_with('/') {
+        // file:///path
+        rest
+    } else if let Some(after_host) = rest.strip_prefix("localhost") {
+        // file://localhost/path
+        after_host
+    } else {
+        return None;
+    };
+    Some(percent_decode(path_str))
 }
 
 fn project_name_of(path: &str) -> Option<String> {
@@ -55,14 +85,15 @@ fn get_vscode_workspace() -> Option<VscodeUpdate> {
             });
 
         if let Some(folder) = folder {
-            let path = uri_to_path(folder);
-            let project_name = project_name_of(&path);
-            return Some(VscodeUpdate {
-                workspace_path: Some(path),
-                project_name,
-                active_file: None,
-                branch: None,
-            });
+            if let Some(path) = uri_to_path(folder) {
+                let project_name = project_name_of(&path);
+                return Some(VscodeUpdate {
+                    workspace_path: Some(path),
+                    project_name,
+                    active_file: None,
+                    branch: None,
+                });
+            }
         }
     }
     None

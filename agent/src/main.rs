@@ -46,11 +46,11 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         Some(cli::Command::Stop) => {
-            cli::cmd_stop();
+            cli::cmd_stop(cfg.port);
             return Ok(());
         }
         Some(cli::Command::Restart) => {
-            cli::cmd_stop();
+            cli::cmd_stop(cfg.port);
             // Fall through to run.
         }
         Some(cli::Command::Qr) => {
@@ -66,14 +66,14 @@ async fn main() -> Result<()> {
         }
     }
 
-    cli::kill_stale_instance();
-
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("helm_agent=info".parse()?),
         )
         .init();
+
+    cli::kill_stale_instance(cfg.port);
 
     cli::write_pid();
 

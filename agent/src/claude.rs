@@ -32,7 +32,11 @@ struct ClaudeStateFile {
 
 fn state_file_path() -> PathBuf {
     dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.local/share"))
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .map(|h| h.join(".local").join("share"))
+                .unwrap_or_else(|| PathBuf::from("/tmp/helm"))
+        })
         .join("helm")
         .join("claude_state.json")
 }
@@ -101,7 +105,11 @@ pub async fn run(state: SharedState, tx: StateTx, _cfg: HelmConfig) {
     let state_path = state_file_path();
     let watch_dir = state_path.parent().map(PathBuf::from).unwrap_or_else(|| {
         dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.local/share"))
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .map(|h| h.join(".local").join("share"))
+                    .unwrap_or_else(|| PathBuf::from("/tmp/helm"))
+            })
             .join("helm")
     });
 

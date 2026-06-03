@@ -12,8 +12,8 @@ pub async fn run(state: SharedState, tx: StateTx, cfg: HelmConfig) {
     ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
     let mut networks = Networks::new_with_refreshed_list();
-    let mut prev_tx: u64 = networks.iter().map(|(_, n)| n.total_transmitted()).sum();
-    let mut prev_rx: u64 = networks.iter().map(|(_, n)| n.total_received()).sum();
+    let mut prev_tx: u64 = networks.iter().map(|(_, n)| n.total_transmitted()).fold(0u64, |acc, x| acc.saturating_add(x));
+    let mut prev_rx: u64 = networks.iter().map(|(_, n)| n.total_received()).fold(0u64, |acc, x| acc.saturating_add(x));
     let mut last_tick = Instant::now();
 
     loop {
@@ -21,8 +21,8 @@ pub async fn run(state: SharedState, tx: StateTx, cfg: HelmConfig) {
         let elapsed = last_tick.elapsed().as_secs_f64().max(0.001);
         last_tick = Instant::now();
         networks.refresh();
-        let total_tx: u64 = networks.iter().map(|(_, n)| n.total_transmitted()).sum();
-        let total_rx: u64 = networks.iter().map(|(_, n)| n.total_received()).sum();
+        let total_tx: u64 = networks.iter().map(|(_, n)| n.total_transmitted()).fold(0u64, |acc, x| acc.saturating_add(x));
+        let total_rx: u64 = networks.iter().map(|(_, n)| n.total_received()).fold(0u64, |acc, x| acc.saturating_add(x));
         let up_bps = (total_tx.saturating_sub(prev_tx) as f64 / elapsed) as u64;
         let down_bps = (total_rx.saturating_sub(prev_rx) as f64 / elapsed) as u64;
         prev_tx = total_tx;
