@@ -19,6 +19,15 @@ android {
         versionName = "0.4.3"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("HELM_KEYSTORE_PATH") ?: "${System.getProperty("user.home")}/helm-release.jks")
+            storePassword = System.getenv("HELM_KEYSTORE_PASS") ?: ""
+            keyAlias = System.getenv("HELM_KEY_ALIAS") ?: "helm"
+            keyPassword = System.getenv("HELM_KEY_PASS") ?: ""
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,6 +36,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
