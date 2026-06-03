@@ -1,6 +1,6 @@
 [package]
 name = "helm-agent"
-version = "0.4.6"
+version = "0.4.7"
 edition = "2021"
 description = "HELM desktop agent — serves system data to Android sidecar display"
 license = "MIT"
@@ -39,7 +39,7 @@ libc = "0.2"
 
 # Security (WiFi mode)
 rcgen = "0.13"
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 tokio-rustls = "0.26"
 rustls-pemfile = "2"
 rand = { version = "0.8", features = ["getrandom"] }
