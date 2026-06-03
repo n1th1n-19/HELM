@@ -85,7 +85,7 @@ private fun OverviewCompact(state: dev.helm.app.data.model.HelmState, modifier: 
     }
 }
 
-// ── Medium (600–840dp) — two equal columns, each scrollable ──────────────────
+// ── Medium (600–840dp) — two scrollable columns ──────────────────────────────
 
 @Composable
 private fun OverviewMedium(state: dev.helm.app.data.model.HelmState, modifier: Modifier = Modifier) {
@@ -95,7 +95,7 @@ private fun OverviewMedium(state: dev.helm.app.data.model.HelmState, modifier: M
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SystemCard(system = state.system, modifier = w)
@@ -104,7 +104,7 @@ private fun OverviewMedium(state: dev.helm.app.data.model.HelmState, modifier: M
             AccountUsageCard(account = state.account, modifier = w)
         }
         Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ClaudeCard(claude = state.claude, modifier = w)
@@ -116,52 +116,38 @@ private fun OverviewMedium(state: dev.helm.app.data.model.HelmState, modifier: M
     }
 }
 
-// ── Expanded (>840dp) — three columns, fixed height ──────────────────────────
+// ── Expanded (>840dp) — three scrollable columns ─────────────────────────────
 
 @Composable
 private fun OverviewExpanded(state: dev.helm.app.data.model.HelmState, modifier: Modifier = Modifier) {
+    val w = Modifier.fillMaxWidth()
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Left column — System + Git
         Column(
-            modifier = Modifier.weight(3f).fillMaxHeight(),
+            modifier = Modifier.weight(3f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SystemCard(system = state.system, modifier = Modifier.weight(1f).fillMaxWidth())
-            GitCard(git = state.git, modifier = Modifier.weight(1f).fillMaxWidth())
+            SystemCard(system = state.system, modifier = w)
+            GitCard(git = state.git, modifier = w)
+            AccountUsageCard(account = state.account, modifier = w)
         }
-
-        // Middle column — Development + Media
         Column(
-            modifier = Modifier.weight(3f).fillMaxHeight(),
+            modifier = Modifier.weight(3f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            DevelopmentCard(vscode = state.vscode, git = state.git, modifier = Modifier.weight(1f).fillMaxWidth())
-            MediaCard(music = state.music, modifier = Modifier.weight(1f).fillMaxWidth())
+            DevelopmentCard(vscode = state.vscode, git = state.git, modifier = w)
+            MediaCard(music = state.music, modifier = w)
+            EventsCard(events = state.events, modifier = w)
+            RecentCommitsCard(commits = state.git.commits ?: emptyList(), modifier = w)
+            TerminalStatusCard(terminal = state.terminal, modifier = w)
         }
-
-        // Right column — Claude (dominant) + 2×2 bottom grid
         Column(
-            modifier = Modifier.weight(6f).fillMaxHeight(),
+            modifier = Modifier.weight(6f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ClaudeCard(claude = state.claude, modifier = Modifier.weight(5f).fillMaxWidth())
-            Row(
-                modifier = Modifier.weight(2f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                EventsCard(events = state.events, modifier = Modifier.weight(1f).fillMaxHeight())
-                RecentCommitsCard(commits = state.git.commits ?: emptyList(), modifier = Modifier.weight(1f).fillMaxHeight())
-            }
-            Row(
-                modifier = Modifier.weight(2f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TerminalStatusCard(terminal = state.terminal, modifier = Modifier.weight(1f).fillMaxHeight())
-                AccountUsageCard(account = state.account, modifier = Modifier.weight(1f).fillMaxHeight())
-            }
+            ClaudeCard(claude = state.claude, modifier = w)
         }
     }
 }
@@ -265,11 +251,11 @@ fun SystemCard(system: SystemUpdate, modifier: Modifier = Modifier) {
 
     HelmCard(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(14.dp).fillMaxSize(),
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             CardLabel("SYSTEM")
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricItem("CPU", cpuVal, "%", HelmCpu, Modifier.weight(1f))
                 MetricItem("RAM", ramVal, "", HelmRam, Modifier.weight(1f))
@@ -278,7 +264,7 @@ fun SystemCard(system: SystemUpdate, modifier: Modifier = Modifier) {
                 MetricItem("TEMP", tempVal, "°C", HelmTemperature, Modifier.weight(1f))
                 MetricItem("NET↓", netVal, "", HelmNetwork, Modifier.weight(1f))
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -325,7 +311,7 @@ private fun MetricItem(label: String, value: String, unit: String, accent: Color
 fun GitCard(git: GitUpdate, modifier: Modifier = Modifier) {
     HelmCard(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(14.dp).fillMaxSize(),
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
@@ -364,7 +350,7 @@ fun GitCard(git: GitUpdate, modifier: Modifier = Modifier) {
 fun DevelopmentCard(vscode: VscodeUpdate, git: GitUpdate, modifier: Modifier = Modifier) {
     HelmCard(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(14.dp).fillMaxSize(),
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             CardLabel("PROJECT")
@@ -386,7 +372,7 @@ fun DevelopmentCard(vscode: VscodeUpdate, git: GitUpdate, modifier: Modifier = M
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
             // Dev server status placeholder
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -405,7 +391,7 @@ fun DevelopmentCard(vscode: VscodeUpdate, git: GitUpdate, modifier: Modifier = M
 fun MediaCard(music: MusicUpdate, modifier: Modifier = Modifier) {
     HelmCard(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(14.dp).fillMaxSize(),
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CardLabel("MEDIA")
@@ -476,7 +462,7 @@ fun MediaCard(music: MusicUpdate, modifier: Modifier = Modifier) {
 @Composable
 fun ClaudeCard(claude: ClaudeUpdate, modifier: Modifier = Modifier) {
     HelmCard(modifier = modifier) {
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 160.dp)) {
             // Orange left accent stripe
             Box(
                 modifier = Modifier
@@ -487,8 +473,7 @@ fun ClaudeCard(claude: ClaudeUpdate, modifier: Modifier = Modifier) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(16.dp)
-                    .fillMaxHeight(),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(
@@ -536,7 +521,7 @@ fun ClaudeCard(claude: ClaudeUpdate, modifier: Modifier = Modifier) {
                     )
                 }
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(8.dp))
 
                 // Stats row
                 Row(
