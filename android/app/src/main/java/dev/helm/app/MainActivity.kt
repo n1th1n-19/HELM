@@ -25,7 +25,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Start foreground service (keeps connection alive when backgrounded)
-        startForegroundService(Intent(this, HelmForegroundService::class.java))
+        // Guard against redundant starts on config changes and activity recreations
+        if (!HelmForegroundService.isRunning) {
+            startForegroundService(Intent(this, HelmForegroundService::class.java))
+        }
 
         // Enable kiosk mode
         KioskManager.enable(this)

@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 use tokio::time;
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub async fn maintain_reverse(port: u16) {
     let local = format!("tcp:{port}");
@@ -16,15 +16,20 @@ pub async fn maintain_reverse(port: u16) {
 
     loop {
         ticker.tick().await;
-        let result = tokio::process::Command::new("adb")
-            .args(["reverse", "--no-rebind", &local, &remote])
-            .output()
-            .await;
-        match result {
-            Ok(out) if out.status.success() => {
+        match tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::process::Command::new("adb")
+                .args(["reverse", "--no-rebind", &local, &remote])
+                .output(),
+        )
+        .await
+        {
+            Ok(Ok(out)) if out.status.success() => {
                 debug!("adb reverse tcp:{port} tcp:{port} ok");
             }
-            _ => {} // no device attached or adb not in PATH — silent
+            Ok(Ok(_)) => warn!("adb reverse failed"),
+            Ok(Err(e)) => warn!("adb reverse error: {e}"),
+            Err(_) => warn!("adb reverse timed out"),
         }
     }
 }

@@ -7,6 +7,7 @@ import dev.helm.app.data.model.HelmCommand
 import dev.helm.app.data.model.HelmEnvelope
 import dev.helm.app.data.model.HelmState
 import dev.helm.app.data.model.MusicUpdate
+import dev.helm.app.data.model.PlaybackState
 import dev.helm.app.data.model.ProcessUpdate
 import dev.helm.app.data.model.SystemInfo
 import dev.helm.app.data.model.SystemUpdate
@@ -20,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -46,7 +48,7 @@ class HelmRepository @Inject constructor(
     init {
         scope.launch {
             connectionManager.messages.collect { envelope ->
-                _state.value = applyDelta(_state.value, envelope)
+                _state.update { applyDelta(it, envelope) }
             }
         }
     }
@@ -151,17 +153,24 @@ fun GitUpdate.merge(delta: GitUpdate) = GitUpdate(
     commits = delta.commits ?: commits,
 )
 
-fun MusicUpdate.merge(delta: MusicUpdate) = MusicUpdate(
-    player = delta.player ?: player,
-    title = delta.title ?: title,
-    artist = delta.artist ?: artist,
-    album = delta.album ?: album,
-    albumArtB64 = delta.albumArtB64 ?: albumArtB64,
-    durationMs = delta.durationMs ?: durationMs,
-    positionMs = delta.positionMs ?: positionMs,
-    volume = delta.volume ?: volume,
-    state = delta.state ?: state,
-)
+fun MusicUpdate.merge(delta: MusicUpdate): MusicUpdate {
+    val merged = MusicUpdate(
+        player = delta.player ?: player,
+        state = delta.state ?: state,
+        title = delta.title ?: title,
+        artist = delta.artist ?: artist,
+        album = delta.album ?: album,
+        albumArtB64 = delta.albumArtB64 ?: albumArtB64,
+        durationMs = delta.durationMs ?: durationMs,
+        positionMs = delta.positionMs ?: positionMs,
+        volume = delta.volume ?: volume,
+    )
+    // If playback stopped or player is gone, clear track metadata so stale
+    // song info doesn't linger on screen after the agent sends state=Stopped.
+    return if (merged.state == PlaybackState.Stopped || merged.player == null) {
+        merged.copy(title = null, artist = null, album = null, albumArtB64 = null, positionMs = null, durationMs = null)
+    } else merged
+}
 
 fun WindowUpdate.merge(delta: WindowUpdate) = WindowUpdate(
     appName = delta.appName ?: appName,
@@ -177,12 +186,19 @@ fun VscodeUpdate.merge(delta: VscodeUpdate) = VscodeUpdate(
     branch = delta.branch ?: branch,
 )
 
-fun ClaudeUpdate.merge(delta: ClaudeUpdate) = ClaudeUpdate(
-    status = delta.status ?: status,
-    task = delta.task ?: task,
-    currentFile = delta.currentFile ?: currentFile,
-    sessionDurationSecs = delta.sessionDurationSecs ?: sessionDurationSecs,
-    tokensUsed = delta.tokensUsed ?: tokensUsed,
-    tokensMax = delta.tokensMax ?: tokensMax,
-    contextPercent = delta.contextPercent ?: contextPercent,
-)
+fun ClaudeUpdate.merge(delta: ClaudeUpdate): ClaudeUpdate {
+    val merged = ClaudeUpdate(
+        status = delta.status ?: status,
+        task = delta.task ?: task,
+        currentFile = delta.currentFile ?: currentFile,
+        sessionDurationSecs = delta.sessionDurationSecs ?: sessionDurationSecs,
+        tokensUsed = delta.tokensUsed ?: tokensUsed,
+        tokensMax = delta.tokensMax ?: tokensMax,
+        contextPercent = delta.contextPercent ?: contextPercent,
+    )
+    // When Claude goes idle or status clears, wipe session-specific fields so
+    // stale task/file/token data doesn't linger on screen.
+    return if (merged.status == "idle" || merged.status == null) {
+        merged.copy(task = null, currentFile = null, tokensUsed = null, tokensMax = null, contextPercent = null, sessionDurationSecs = null)
+    } else merged
+}

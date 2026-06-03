@@ -77,12 +77,22 @@ pub fn run_tray(
                 let _ = shutdown_tx.blocking_send(());
                 return Ok(());
             } else if event.id == restart_id {
+                // Signal shutdown first so the old server releases its port
+                // before the new process starts, avoiding a bind race.
+                let _ = shutdown_tx.blocking_send(());
+                std::thread::sleep(std::time::Duration::from_millis(500));
                 if let Ok(exe) = std::env::current_exe() {
                     let _ = std::process::Command::new(exe).spawn();
                 }
-                let _ = shutdown_tx.blocking_send(());
                 return Ok(());
             }
+        }
+
+        // On Linux the tray backend is GTK/libappindicator; pump the GLib
+        // event loop so menu-click signals are dispatched to the receiver.
+        #[cfg(all(target_os = "linux", feature = "tray"))]
+        {
+            gtk::main_iteration_do(false);
         }
 
         std::thread::sleep(std::time::Duration::from_millis(500));

@@ -29,15 +29,18 @@ fn read_diskstats() -> std::io::Result<(u64, u64)> {
     }
 
     // /proc/diskstats uses 512-byte sectors
-    Ok((sectors_read * 512, sectors_written * 512))
+    Ok((sectors_read.saturating_mul(512), sectors_written.saturating_mul(512)))
 }
 
 /// Returns true for whole-disk devices, false for partitions.
 /// Examples: sda ✓, sda1 ✗, nvme0n1 ✓, nvme0n1p1 ✗, mmcblk0 ✓, mmcblk0p1 ✗
+/// mmcblk0boot0, mmcblk0boot1, mmcblk0rpmb are excluded (partition-like, end in digit).
 fn is_whole_disk(name: &str) -> bool {
     if name.starts_with("nvme") || name.starts_with("mmcblk") {
-        !name.contains('p')
+        // partitions end in a digit (nvme0n1p1, mmcblk0p1, mmcblk0boot0, mmcblk0rpmb)
+        !name.chars().last().map_or(true, |c| c.is_ascii_digit())
     } else {
+        // sd/vd/hd: whole disk ends in letter (sda), partition ends in digit (sda1)
         name.chars().last().map_or(false, |c| c.is_ascii_alphabetic())
     }
 }

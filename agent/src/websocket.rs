@@ -172,6 +172,7 @@ where
             }
         }
 
+        let mut disconnected = false;
         loop {
             tokio::select! {
                 result = broadcast_rx.recv() => {
@@ -182,7 +183,21 @@ where
                             }
                         }
                         Err(broadcast::error::RecvError::Lagged(n)) => {
-                            warn!("Client {} lagged by {} messages", peer_addr, n);
+                            warn!("Client {} lagged by {} messages, resyncing", peer_addr, n);
+                            // Send a full snapshot so the client is back in sync.
+                            let msgs = {
+                                let s = state.read().await;
+                                build_full_snapshot(&s)
+                            };
+                            for msg in msgs {
+                                if ws_tx.send(Message::Text(msg.into())).await.is_err() {
+                                    disconnected = true;
+                                    break;
+                                }
+                            }
+                            if disconnected {
+                                break;
+                            }
                         }
                         Err(_) => break,
                     }

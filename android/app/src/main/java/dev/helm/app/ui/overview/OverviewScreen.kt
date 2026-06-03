@@ -334,8 +334,8 @@ fun DevelopmentCard(vscode: VscodeUpdate, git: GitUpdate, modifier: Modifier = M
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(6.dp).background(HelmSuccess, CircleShape))
-                Text("Dev server", fontSize = 11.sp, color = HelmTextSecondary)
+                Box(Modifier.size(6.dp).background(HelmTextTertiary, CircleShape))
+                Text("Dev server", fontSize = 11.sp, color = HelmTextTertiary)
             }
         }
     }

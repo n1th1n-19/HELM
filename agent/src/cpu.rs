@@ -14,10 +14,11 @@ fn collect(sys: &mut System) -> (f32, Option<f64>, u64) {
     } else {
         cpus.iter().map(|c| c.cpu_usage()).sum::<f32>() / cpus.len() as f32
     };
-    let avg_freq = if cpus.iter().any(|c| c.frequency() > 0) {
-        Some(cpus.iter().map(|c| c.frequency() as f64).sum::<f64>() / cpus.len() as f64)
-    } else {
+    let freqs: Vec<u64> = cpus.iter().map(|c| c.frequency()).filter(|&f| f > 0).collect();
+    let avg_freq = if freqs.is_empty() {
         None
+    } else {
+        Some(freqs.iter().sum::<u64>() as f64 / freqs.len() as f64)
     };
     let uptime = System::uptime();
     (cpu_percent, avg_freq, uptime)

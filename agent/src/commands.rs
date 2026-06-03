@@ -52,7 +52,7 @@ pub async fn execute_command(
         CommandAction::GitPull => git_command(state, &["pull"]).await,
         CommandAction::GitPush => git_command(state, &["push"]).await,
         CommandAction::OpenTerminal => open_terminal().await,
-        CommandAction::OpenProject => open_project(args, state).await,
+        CommandAction::OpenProject => open_project(args, cfg, state).await,
         CommandAction::Lock => run_simple(&["loginctl", "lock-session"]).await,
         CommandAction::Suspend => guarded_power(args, "systemctl", "suspend").await,
         CommandAction::Reboot => guarded_power(args, "systemctl", "reboot").await,
@@ -99,9 +99,37 @@ async fn git_command(state: &SharedState, sub_args: &[&str]) -> CmdResult {
     run_cmd(cmd).await
 }
 
+/// Return the first known terminal emulator found in PATH.
+///
+/// Ignores `$TERMINAL` entirely to prevent arbitrary-binary execution via a
+/// user-controlled or attacker-controlled environment variable.
+fn find_terminal() -> Option<String> {
+    let known = [
+        "kitty",
+        "alacritty",
+        "wezterm",
+        "foot",
+        "xterm",
+        "gnome-terminal",
+        "konsole",
+        "xfce4-terminal",
+    ];
+    known
+        .iter()
+        .find(|t| {
+            std::process::Command::new("which")
+                .arg(t)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        })
+        .map(|t| t.to_string())
+}
+
 /// Open the user's preferred terminal emulator.
 async fn open_terminal() -> CmdResult {
-    let terminal = std::env::var("TERMINAL").unwrap_or_else(|_| "xterm".to_string());
+    let terminal = find_terminal()
+        .ok_or_else(|| "no supported terminal emulator found in PATH".to_string())?;
     let mut cmd = TokioCommand::new(&terminal);
     // Detach so the terminal lives beyond the agent process.
     cmd.stdin(std::process::Stdio::null())
@@ -112,9 +140,24 @@ async fn open_terminal() -> CmdResult {
     Ok(Some(format!("opened {terminal}")))
 }
 
+/// Validate that `path` resolves to a location under one of the configured
+/// `git_watch_paths`. Uses `canonicalize` to neutralise `../` traversal
+/// before the prefix check.
+fn is_allowed_path(path: &str, cfg: &crate::config::HelmConfig) -> bool {
+    let Ok(canonical) = std::fs::canonicalize(path) else {
+        return false;
+    };
+    cfg.git_watch_paths.iter().any(|root| {
+        std::fs::canonicalize(root)
+            .map(|r| canonical.starts_with(&r))
+            .unwrap_or(false)
+    })
+}
+
 /// Open a project in VS Code / Codium.
 async fn open_project(
     args: Args<'_>,
+    cfg: &HelmConfig,
     state: &SharedState,
 ) -> CmdResult {
     let path = match args.and_then(|a| a.get("path")) {
@@ -128,6 +171,14 @@ async fn open_project(
                 .ok_or_else(|| "no path argument and no workspace in state".to_string())?
         }
     };
+
+    // Reject paths that escape the configured git_watch_paths roots to
+    // prevent path-traversal attacks from a compromised Android client.
+    if !is_allowed_path(&path, cfg) {
+        return Err(format!(
+            "path '{path}' is not under any configured git_watch_paths"
+        ));
+    }
 
     // Try `code` first, fall back to `codium`.
     for editor in &["code", "codium"] {
