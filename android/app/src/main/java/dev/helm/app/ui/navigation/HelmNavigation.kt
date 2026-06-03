@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.helm.app.data.websocket.ConnectionState
+import dev.helm.app.ui.account.AccountScreen
 import dev.helm.app.ui.claude.ClaudeScreen
 import dev.helm.app.ui.components.ConnectionBanner
 import dev.helm.app.ui.development.DevelopmentScreen
@@ -26,6 +27,7 @@ enum class HelmTab(val label: String, val icon: ImageVector) {
     Development("Dev", Icons.Outlined.Code),
     Git("Git", Icons.Outlined.AccountTree),
     Claude("Claude", Icons.Outlined.AutoAwesome),
+    Account("Account", Icons.Outlined.Person),
     System("System", Icons.Outlined.Memory),
     Settings("Settings", Icons.Outlined.Settings),
 }
@@ -72,6 +74,7 @@ fun HelmNavigation(
                     HelmTab.Development -> DevelopmentScreen()
                     HelmTab.Git         -> GitScreen()
                     HelmTab.Claude      -> ClaudeScreen()
+                    HelmTab.Account     -> AccountScreen()
                     HelmTab.System      -> SystemScreen()
                     HelmTab.Settings    -> SettingsScreen()
                 }

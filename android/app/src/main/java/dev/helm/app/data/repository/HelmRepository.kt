@@ -1,7 +1,10 @@
 package dev.helm.app.data.repository
 
+import dev.helm.app.data.model.AccountUpdate
 import dev.helm.app.data.model.ClaudeUpdate
 import dev.helm.app.data.model.CommandAck
+import dev.helm.app.data.model.DashboardEvent
+import dev.helm.app.data.model.EventCategory
 import dev.helm.app.data.model.GitUpdate
 import dev.helm.app.data.model.HelmCommand
 import dev.helm.app.data.model.HelmEnvelope
@@ -11,6 +14,7 @@ import dev.helm.app.data.model.PlaybackState
 import dev.helm.app.data.model.ProcessUpdate
 import dev.helm.app.data.model.SystemInfo
 import dev.helm.app.data.model.SystemUpdate
+import dev.helm.app.data.model.TerminalStatus
 import dev.helm.app.data.model.VscodeUpdate
 import dev.helm.app.data.model.WindowUpdate
 import dev.helm.app.data.websocket.ConnectionManager
@@ -29,8 +33,12 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val MAX_EVENTS = 50
 
 @Singleton
 class HelmRepository @Inject constructor(
@@ -57,6 +65,11 @@ class HelmRepository @Inject constructor(
     fun disconnect() = connectionManager.stop()
     fun reconnect() { connectionManager.stop(); connectionManager.start() }
 
+    /** Called by TerminalViewModel before sendCommand so the Overview shows the running state. */
+    fun startCommand(label: String) {
+        _state.update { it.copy(terminal = TerminalStatus(lastCommand = label, running = true)) }
+    }
+
     suspend fun sendCommand(command: HelmCommand) {
         val envelope = json.encodeToString(
             buildJsonObject {
@@ -70,7 +83,8 @@ class HelmRepository @Inject constructor(
 
     private fun applyDelta(current: HelmState, envelope: HelmEnvelope): HelmState {
         return try {
-            when (envelope.type) {
+            val newEvents = deriveEvents(current, envelope)
+            val next = when (envelope.type) {
                 "system_update" -> {
                     val delta = json.decodeFromJsonElement<SystemUpdate>(envelope.payload)
                     current.copy(system = current.system.merge(delta))
@@ -93,7 +107,7 @@ class HelmRepository @Inject constructor(
                 }
                 "process_update" -> {
                     val delta = json.decodeFromJsonElement<ProcessUpdate>(envelope.payload)
-                    current.copy(process = delta) // always full list
+                    current.copy(process = delta)
                 }
                 "system_info" -> {
                     val info = json.decodeFromJsonElement<SystemInfo>(envelope.payload)
@@ -105,15 +119,66 @@ class HelmRepository @Inject constructor(
                 }
                 "command_ack" -> {
                     val ack = json.decodeFromJsonElement<CommandAck>(envelope.payload)
-                    // Cap at 50 entries to prevent unbounded growth.
                     val updated = (current.commandAcks + (ack.id to ack))
                         .let { map -> if (map.size > 50) map.entries.drop(map.size - 50).associate { it.toPair() } else map }
-                    current.copy(commandAcks = updated)
+                    current.copy(
+                        commandAcks = updated,
+                        terminal = current.terminal.copy(running = false),
+                    )
+                }
+                "account_update" -> {
+                    val delta = json.decodeFromJsonElement<AccountUpdate>(envelope.payload)
+                    current.copy(account = delta)
                 }
                 else -> current
             }
+            if (newEvents.isEmpty()) next
+            else next.copy(events = (newEvents + next.events).take(MAX_EVENTS))
         } catch (e: Exception) {
-            current // ignore malformed payloads
+            current
+        }
+    }
+
+    private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+
+    private fun deriveEvents(current: HelmState, envelope: HelmEnvelope): List<DashboardEvent> {
+        val t = LocalTime.now().format(timeFmt)
+        return try {
+            when (envelope.type) {
+                "claude_update" -> {
+                    val delta = json.decodeFromJsonElement<ClaudeUpdate>(envelope.payload)
+                    val prevStatus = current.claude.status
+                    val nextStatus = delta.status ?: prevStatus
+                    when {
+                        prevStatus != "active" && nextStatus == "active" ->
+                            listOf(DashboardEvent(t, "Claude session started", EventCategory.Claude))
+                        prevStatus == "active" && (nextStatus == "idle" || nextStatus == null) ->
+                            listOf(DashboardEvent(t, "Claude session ended", EventCategory.Claude))
+                        else -> emptyList()
+                    }
+                }
+                "git_update" -> {
+                    val delta = json.decodeFromJsonElement<GitUpdate>(envelope.payload)
+                    buildList {
+                        if (delta.branch != null && delta.branch != current.git.branch && current.git.branch != null)
+                            add(DashboardEvent(t, "Switched to ${delta.branch}", EventCategory.Git))
+                        val newHead = delta.commits?.firstOrNull()?.hash
+                        val oldHead = current.git.commits?.firstOrNull()?.hash
+                        if (newHead != null && newHead != oldHead && oldHead != null)
+                            add(DashboardEvent(t, delta.commits!!.first().message.take(50), EventCategory.Git))
+                    }
+                }
+                "command_ack" -> {
+                    val ack = json.decodeFromJsonElement<CommandAck>(envelope.payload)
+                    val label = current.terminal.lastCommand ?: "Command"
+                    val msg = if (ack.success) "$label OK" else "$label failed: ${ack.message ?: "error"}"
+                    val cat = if (ack.success) EventCategory.System else EventCategory.System
+                    listOf(DashboardEvent(t, msg, cat))
+                }
+                else -> emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 }
@@ -195,9 +260,12 @@ fun ClaudeUpdate.merge(delta: ClaudeUpdate): ClaudeUpdate {
         tokensUsed = delta.tokensUsed ?: tokensUsed,
         tokensMax = delta.tokensMax ?: tokensMax,
         contextPercent = delta.contextPercent ?: contextPercent,
+        totalOutputTokens = delta.totalOutputTokens ?: totalOutputTokens,
+        totalCacheCreationTokens = delta.totalCacheCreationTokens ?: totalCacheCreationTokens,
+        totalCacheReadTokens = delta.totalCacheReadTokens ?: totalCacheReadTokens,
+        totalSessions = delta.totalSessions ?: totalSessions,
     )
-    // When Claude goes idle or status clears, wipe session-specific fields so
-    // stale task/file/token data doesn't linger on screen.
+    // When Claude goes idle, wipe session-specific fields. Account stats persist.
     return if (merged.status == "idle" || merged.status == null) {
         merged.copy(task = null, currentFile = null, tokensUsed = null, tokensMax = null, contextPercent = null, sessionDurationSecs = null)
     } else merged

@@ -45,7 +45,7 @@ fun ClaudeScreen(
             ClaudeContextPanel(claude = claude, modifier = Modifier.weight(1f).fillMaxWidth())
         }
 
-        // Right panel — task and file info
+        // Right panel — task, file info, account usage
         Column(
             modifier = Modifier.weight(8f).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -202,6 +202,28 @@ private fun ClaudeSessionPanel(claude: ClaudeUpdate, modifier: Modifier = Modifi
                 DetailItem("Tokens Used", claude.tokensUsed?.let { formatTokens(it) } ?: "--")
                 DetailItem("Context Max", claude.tokensMax?.let { formatTokens(it) } ?: "--")
                 DetailItem("Context %", claude.contextPercent?.let { "${it.toInt()}%" } ?: "--")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClaudeAccountPanel(claude: ClaudeUpdate, modifier: Modifier = Modifier) {
+    if (claude.totalSessions == null && claude.totalOutputTokens == null) return
+    HelmCard(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ScreenLabel("ACCOUNT USAGE")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                DetailItem("Sessions", claude.totalSessions?.toString() ?: "--")
+                DetailItem("Output Tokens", claude.totalOutputTokens?.let { formatTokens(it) } ?: "--")
+                DetailItem("Cache Created", claude.totalCacheCreationTokens?.let { formatTokens(it) } ?: "--")
+                DetailItem("Cache Read", claude.totalCacheReadTokens?.let { formatTokens(it) } ?: "--")
             }
         }
     }
