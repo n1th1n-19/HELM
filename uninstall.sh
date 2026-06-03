@@ -18,6 +18,26 @@ for SVC in helm helm-agent; do
     systemctl --user disable "$SVC" 2>/dev/null || true
 done
 
+# Kill any orphan not tracked by systemd (covers port 9090 current + 8080 legacy).
+_kill_port() {
+    local port_hex
+    port_hex=$(printf '%04X' "$1")
+    local inode
+    inode=$(awk -v p="$port_hex" \
+      'NR>1 && toupper($2) ~ ":"p"$" && $4=="0A" {print $10}' \
+      /proc/net/tcp /proc/net/tcp6 2>/dev/null | head -1)
+    [ -z "$inode" ] && return
+    local pid
+    pid=$(grep -rl "socket:\[$inode\]" /proc/*/fd 2>/dev/null | head -1 | cut -d/ -f3)
+    [ -z "$pid" ] && return
+    echo "  killing orphan pid=$pid on port $1"
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+    kill -9 "$pid" 2>/dev/null || true
+}
+_kill_port "$PORT"
+_kill_port 8080
+
 # 2. Remove systemd units + reload daemon
 UNIT_DIR="$HOME/.config/systemd/user"
 REMOVED_UNIT=0
