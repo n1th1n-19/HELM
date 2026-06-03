@@ -78,9 +78,20 @@ class ConnectionManager @Inject constructor(
             } catch (e: CancellationException) {
                 throw e // always rethrow — cancellation must propagate
             } catch (e: Exception) {
-                val msg = e.message ?: e.javaClass.simpleName
+                val raw = e.message ?: e.javaClass.simpleName
+                val msg = when {
+                    "unexpected end of stream" in raw.lowercase() ->
+                        "Agent not reachable — make sure helm-agent is running"
+                    "connection refused" in raw.lowercase() ->
+                        "Connection refused — agent not running on host"
+                    "failed to connect" in raw.lowercase() ->
+                        "Cannot connect to agent"
+                    "timeout" in raw.lowercase() ->
+                        "Connection timed out"
+                    else -> raw
+                }
                 _lastError.value = msg
-                Log.w(TAG, "connection failed: $msg")
+                Log.w(TAG, "connection failed: $raw")
             }
             if (_connectionState.value == ConnectionState.Connected) {
                 _connectionState.value = ConnectionState.Reconnecting
