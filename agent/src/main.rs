@@ -20,6 +20,7 @@ mod window;
 mod workspace;
 
 // Command handler stub (Task 6).
+mod account;
 mod claude;
 mod commands;
 
@@ -112,6 +113,7 @@ async fn main() -> Result<()> {
     tokio::spawn(window::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(music::run(state.clone(), state_tx.clone(), cfg.clone()));
     tokio::spawn(claude::run(state.clone(), state_tx.clone(), cfg.clone()));
+    tokio::spawn(account::run(state.clone(), state_tx.clone(), cfg.clone()));
 
     let wifi_mode = cfg.bind_host != "127.0.0.1";
 

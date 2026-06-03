@@ -222,6 +222,37 @@ pub struct Command {
     pub args: Option<std::collections::HashMap<String, String>>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AccountUpdate {
+    // Static account info (from ~/.claude/.credentials.json)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_limit_tier: Option<String>,
+
+    // Subscription rate limit usage (from API response headers)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_used_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_reset_secs: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weekly_used_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weekly_reset_secs: Option<i64>,
+
+    // Local activity (from ~/.claude/stats-cache.json)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub today_messages: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub today_sessions: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub week_messages: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub week_sessions: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandAck {
     pub id: String,

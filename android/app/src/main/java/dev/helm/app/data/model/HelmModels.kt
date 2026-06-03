@@ -186,6 +186,23 @@ data class CommandAck(
     val message: String? = null,
 )
 
+// ── Account & usage ──────────────────────────────────────────────────────────
+
+@Serializable
+data class AccountUpdate(
+    val email: String? = null,
+    val plan: String? = null,
+    @SerialName("rate_limit_tier") val rateLimitTier: String? = null,
+    @SerialName("session_used_pct") val sessionUsedPct: Float? = null,
+    @SerialName("session_reset_secs") val sessionResetSecs: Long? = null,
+    @SerialName("weekly_used_pct") val weeklyUsedPct: Float? = null,
+    @SerialName("weekly_reset_secs") val weeklyResetSecs: Long? = null,
+    @SerialName("today_messages") val todayMessages: Int? = null,
+    @SerialName("today_sessions") val todaySessions: Int? = null,
+    @SerialName("week_messages") val weekMessages: Int? = null,
+    @SerialName("week_sessions") val weekSessions: Int? = null,
+)
+
 // ── Full aggregated state (client-side, never serialized) ────────────────────
 
 data class HelmState(
@@ -200,4 +217,5 @@ data class HelmState(
     val claude: ClaudeUpdate = ClaudeUpdate(),
     val events: List<DashboardEvent> = emptyList(),
     val terminal: TerminalStatus = TerminalStatus(),
+    val account: AccountUpdate = AccountUpdate(),
 )

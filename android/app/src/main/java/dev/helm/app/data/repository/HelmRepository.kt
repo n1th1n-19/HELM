@@ -1,5 +1,6 @@
 package dev.helm.app.data.repository
 
+import dev.helm.app.data.model.AccountUpdate
 import dev.helm.app.data.model.ClaudeUpdate
 import dev.helm.app.data.model.CommandAck
 import dev.helm.app.data.model.DashboardEvent
@@ -124,6 +125,10 @@ class HelmRepository @Inject constructor(
                         commandAcks = updated,
                         terminal = current.terminal.copy(running = false),
                     )
+                }
+                "account_update" -> {
+                    val delta = json.decodeFromJsonElement<AccountUpdate>(envelope.payload)
+                    current.copy(account = delta)
                 }
                 else -> current
             }

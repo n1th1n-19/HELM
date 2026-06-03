@@ -52,7 +52,6 @@ fun ClaudeScreen(
         ) {
             ClaudeTaskPanel(claude = claude, modifier = Modifier.fillMaxWidth())
             ClaudeSessionPanel(claude = claude, modifier = Modifier.fillMaxWidth())
-            ClaudeAccountPanel(claude = claude, modifier = Modifier.fillMaxWidth())
         }
     }
 }

@@ -273,6 +273,7 @@ fn build_full_snapshot(state: &crate::state::HelmState) -> Vec<String> {
     msgs.push(make_envelope("vscode_update", &state.vscode));
     msgs.push(make_envelope("claude_update", &state.claude));
     msgs.push(make_envelope("process_update", &state.process));
+    msgs.push(make_envelope("account_update", &state.account));
     msgs
 }
 
