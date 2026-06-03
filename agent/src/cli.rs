@@ -157,15 +157,14 @@ pub fn find_pid_by_port(port: u16) -> Option<u32> {
         let Ok(content) = std::fs::read_to_string(path) else { continue };
         for line in content.lines().skip(1) {
             let mut fields = line.split_whitespace();
-            let _sl = fields.next()?;
-            let local = fields.next()?;
-            let _rem = fields.next()?;
-            let state = fields.next()?;
+            let Some(_sl)      = fields.next()  else { continue };
+            let Some(local)    = fields.next()  else { continue };
+            let Some(_rem)     = fields.next()  else { continue };
+            let Some(state)    = fields.next()  else { continue };
             // skip tx_queue, tr, retrnsmt, uid, timeout
             for _ in 0..5 { fields.next(); }
-            let inode_str = fields.next()?;
-
-            let port_hex = local.split(':').nth(1)?;
+            let Some(inode_str) = fields.next() else { continue };
+            let Some(port_hex)  = local.split(':').nth(1) else { continue };
             // 0A = TCP_LISTEN
             if port_hex.eq_ignore_ascii_case(&target) && state == "0A" {
                 if let Ok(inode) = inode_str.parse::<u64>() {
@@ -181,7 +180,10 @@ pub fn find_pid_by_port(port: u16) -> Option<u32> {
 
     let procs = std::fs::read_dir("/proc").ok()?;
     for entry in procs.flatten() {
-        let pid: u32 = entry.file_name().to_string_lossy().parse().ok()?;
+        let pid: u32 = match entry.file_name().to_string_lossy().parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
         let fd_dir = entry.path().join("fd");
         let Ok(fds) = std::fs::read_dir(&fd_dir) else { continue };
         for fd in fds.flatten() {

@@ -66,14 +66,14 @@ async fn main() -> Result<()> {
         }
     }
 
-    cli::kill_stale_instance(cfg.port);
-
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("helm_agent=info".parse()?),
         )
         .init();
+
+    cli::kill_stale_instance(cfg.port);
 
     cli::write_pid();
 
