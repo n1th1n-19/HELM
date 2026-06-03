@@ -150,6 +150,15 @@ pub struct ClaudeUpdate {
     pub tokens_max: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_percent: Option<f32>,
+    // Account-level cumulative usage (scanned from ~/.claude/projects/).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_output_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_cache_creation_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_cache_read_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_sessions: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

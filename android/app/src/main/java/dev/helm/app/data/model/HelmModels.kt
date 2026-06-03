@@ -133,6 +133,10 @@ data class ClaudeUpdate(
     @SerialName("tokens_used") val tokensUsed: Long? = null,
     @SerialName("tokens_max") val tokensMax: Long? = null,
     @SerialName("context_percent") val contextPercent: Float? = null,
+    @SerialName("total_output_tokens") val totalOutputTokens: Long? = null,
+    @SerialName("total_cache_creation_tokens") val totalCacheCreationTokens: Long? = null,
+    @SerialName("total_cache_read_tokens") val totalCacheReadTokens: Long? = null,
+    @SerialName("total_sessions") val totalSessions: Int? = null,
 )
 
 // ── Dashboard events (client-side, never serialized) ─────────────────────────

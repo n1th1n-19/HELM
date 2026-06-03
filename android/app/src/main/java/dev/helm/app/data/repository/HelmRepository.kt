@@ -255,9 +255,12 @@ fun ClaudeUpdate.merge(delta: ClaudeUpdate): ClaudeUpdate {
         tokensUsed = delta.tokensUsed ?: tokensUsed,
         tokensMax = delta.tokensMax ?: tokensMax,
         contextPercent = delta.contextPercent ?: contextPercent,
+        totalOutputTokens = delta.totalOutputTokens ?: totalOutputTokens,
+        totalCacheCreationTokens = delta.totalCacheCreationTokens ?: totalCacheCreationTokens,
+        totalCacheReadTokens = delta.totalCacheReadTokens ?: totalCacheReadTokens,
+        totalSessions = delta.totalSessions ?: totalSessions,
     )
-    // When Claude goes idle or status clears, wipe session-specific fields so
-    // stale task/file/token data doesn't linger on screen.
+    // When Claude goes idle, wipe session-specific fields. Account stats persist.
     return if (merged.status == "idle" || merged.status == null) {
         merged.copy(task = null, currentFile = null, tokensUsed = null, tokensMax = null, contextPercent = null, sessionDurationSecs = null)
     } else merged

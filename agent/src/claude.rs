@@ -63,6 +63,11 @@ fn file_to_update(f: &ClaudeStateFile) -> ClaudeUpdate {
         tokens_used: f.tokens_used,
         tokens_max: f.tokens_max,
         context_percent: f.context_percent,
+        // Account-level fields are populated separately via update_account_usage.
+        total_output_tokens: None,
+        total_cache_creation_tokens: None,
+        total_cache_read_tokens: None,
+        total_sessions: None,
     }
 }
 
@@ -113,7 +118,6 @@ pub async fn run(state: SharedState, tx: StateTx, _cfg: HelmConfig) {
             .join("helm")
     });
 
-    // Ensure the directory exists so we can watch it even before the hook runs.
     if let Err(e) = std::fs::create_dir_all(&watch_dir) {
         warn!("claude: could not create state dir {}: {e}", watch_dir.display());
     }
@@ -140,19 +144,80 @@ pub async fn run(state: SharedState, tx: StateTx, _cfg: HelmConfig) {
     let mut ticker = time::interval(Duration::from_secs(5));
     ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
-    // Initial read.
+    // 5-minute poll for account-level usage (scanning all transcripts is expensive).
+    let mut account_ticker = time::interval(Duration::from_secs(300));
+    account_ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
     update_state(&state, &tx, &state_path).await;
+    update_account_usage(&state, &tx).await;
 
     loop {
         tokio::select! {
             _ = ticker.tick() => {
                 update_state(&state, &tx, &state_path).await;
             }
+            _ = account_ticker.tick() => {
+                update_account_usage(&state, &tx).await;
+            }
             Some(()) = evt_rx.recv() => {
-                // Drain burst events (rename + create fire together on atomic write).
                 while evt_rx.try_recv().is_ok() {}
                 update_state(&state, &tx, &state_path).await;
             }
         }
     }
+}
+
+async fn update_account_usage(state: &SharedState, tx: &StateTx) {
+    let usage = tokio::task::spawn_blocking(scan_account_usage).await;
+    if let Ok(Some((output, cache_creation, cache_read, sessions))) = usage {
+        let mut s = state.write().await;
+        s.claude.total_output_tokens = Some(output);
+        s.claude.total_cache_creation_tokens = Some(cache_creation);
+        s.claude.total_cache_read_tokens = Some(cache_read);
+        s.claude.total_sessions = Some(sessions);
+        let _ = tx.send(());
+    }
+}
+
+/// Scan ~/.claude/projects/**/*.jsonl and sum token usage across all sessions.
+/// Counts output_tokens per assistant message (incremental, no double-counting).
+fn scan_account_usage() -> Option<(u64, u64, u64, u32)> {
+    let projects_dir = dirs::home_dir()?.join(".claude").join("projects");
+    let mut total_output: u64 = 0;
+    let mut total_cache_creation: u64 = 0;
+    let mut total_cache_read: u64 = 0;
+    let mut total_sessions: u32 = 0;
+
+    let projects = std::fs::read_dir(&projects_dir).ok()?;
+    for project in projects.flatten() {
+        if !project.path().is_dir() {
+            continue;
+        }
+        let sessions = std::fs::read_dir(project.path()).ok()?;
+        for session in sessions.flatten() {
+            let path = session.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            total_sessions += 1;
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                for line in content.lines() {
+                    if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                        if entry.get("type").and_then(|t| t.as_str()) != Some("assistant") {
+                            continue;
+                        }
+                        let usage = match entry.get("message").and_then(|m| m.get("usage")) {
+                            Some(u) => u,
+                            None => continue,
+                        };
+                        total_output += usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                        total_cache_creation += usage.get("cache_creation_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                        total_cache_read += usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    }
+                }
+            }
+        }
+    }
+
+    Some((total_output, total_cache_creation, total_cache_read, total_sessions))
 }
