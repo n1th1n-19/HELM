@@ -93,6 +93,30 @@ jobs:
           git tag -a "v${{ steps.version.outputs.version }}" -m "v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.HELM_KEYSTORE_B64 }}" | base64 -d > /tmp/helm-release.jks
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          HELM_KEYSTORE_PATH: /tmp/helm-release.jks
+          HELM_KEYSTORE_PASS: ${{ secrets.HELM_KEYSTORE_PASS }}
+          HELM_KEY_ALIAS: ${{ secrets.HELM_KEY_ALIAS }}
+          HELM_KEY_PASS: ${{ secrets.HELM_KEY_PASS }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Collect APK
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk artifacts/helm-${{ steps.version.outputs.version }}.apk
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
