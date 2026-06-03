@@ -12,7 +12,7 @@ use tracing::error;
 fn collect_battery() -> Option<(f32, bool)> {
     let manager = Manager::new().ok()?;
     let battery = manager.batteries().ok()?.next()?.ok()?;
-    let percent = battery.state_of_charge().value * 100.0;
+    let percent = (battery.state_of_charge().value * 100.0).clamp(0.0, 100.0);
     let charging = battery.state() == battery::State::Charging;
     Some((percent, charging))
 }

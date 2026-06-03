@@ -9,7 +9,7 @@ use tokio::time;
 fn find_cpu_temp(components: &Components) -> Option<f64> {
     components
         .iter()
-        .find(|c| {
+        .filter(|c| {
             let label = c.label().to_lowercase();
             label.contains("cpu")
                 || label.contains("core 0")
@@ -17,10 +17,11 @@ fn find_cpu_temp(components: &Components) -> Option<f64> {
                 || label.contains("tdie")
                 || label.contains("tctl")
         })
-        .and_then(|c| {
+        .filter_map(|c| {
             let t = c.temperature() as f64;
             if t.is_finite() && t > 0.0 { Some(t) } else { None }
         })
+        .next()
 }
 
 pub async fn run(state: SharedState, tx: StateTx, cfg: HelmConfig) {
