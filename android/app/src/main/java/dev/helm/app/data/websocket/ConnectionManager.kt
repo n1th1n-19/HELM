@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,10 +52,10 @@ class ConnectionManager @Inject constructor(
     fun stop() {
         connectJob?.cancel()
         connectJob = null
-        scope.launch {
-            client.disconnect()
-            _connectionState.value = ConnectionState.Disconnected
-        }
+        // runBlocking ensures disconnect completes before stop() returns, preventing a
+        // racing coroutine from closing a session opened by a subsequent start() call.
+        runBlocking { client.disconnect() }
+        _connectionState.value = ConnectionState.Disconnected
     }
 
     private suspend fun connectWithRetry() {
@@ -63,16 +64,15 @@ class ConnectionManager @Inject constructor(
             _connectionState.value = if (attempt == 0) ConnectionState.Connecting
                                      else ConnectionState.Reconnecting
             try {
-                // Mark Connected as soon as the session opens, before first message.
-                var sessionOpen = false
-                client.connect().collect { envelope ->
-                    if (!sessionOpen) {
-                        _connectionState.value = ConnectionState.Connected
-                        _lastError.value = null
-                        attempt = 0
-                        sessionOpen = true
+                client.connect(onSessionOpen = {
+                    // Session HTTP upgrade complete — mark Connected before any message arrives.
+                    _connectionState.value = ConnectionState.Connected
+                    _lastError.value = null
+                    attempt = 0
+                }).collect { envelope ->
+                    if (!_messages.tryEmit(envelope)) {
+                        Log.w(TAG, "message buffer full — dropping ${envelope.type}")
                     }
-                    _messages.tryEmit(envelope)
                 }
                 // Flow completed normally (server closed connection)
             } catch (e: CancellationException) {
