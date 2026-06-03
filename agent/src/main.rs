@@ -66,6 +66,8 @@ async fn main() -> Result<()> {
         }
     }
 
+    cli::kill_stale_instance();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()

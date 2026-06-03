@@ -115,6 +115,30 @@ pub fn cmd_stop() -> bool {
     }
 }
 
+/// Kill any running instance before starting a new one. Called at daemon
+/// startup so stale processes (crash, suspend/resume, manual kill) don't block
+/// port binding. Silent — logs via tracing rather than println.
+pub fn kill_stale_instance() {
+    let Some(pid) = read_pid() else { return };
+    if !pid_alive(pid) {
+        remove_pid();
+        return;
+    }
+    unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+    for _ in 0..30 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if !pid_alive(pid) {
+            break;
+        }
+    }
+    if pid_alive(pid) {
+        unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+        // Brief wait so the kernel reclaims the port before we bind.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    remove_pid();
+}
+
 pub fn cmd_qr(cfg: &crate::config::HelmConfig) {
     let wifi_mode = cfg.bind_host != "127.0.0.1";
     if !wifi_mode {
