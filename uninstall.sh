@@ -8,26 +8,36 @@ PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
 
 echo "Uninstalling HELM..."
 
-# 1. Stop + disable systemd service
+# 1. Stop + disable systemd service (handle both current and legacy names)
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
-systemctl --user stop helm 2>/dev/null && echo "  stopped helm service" || true
-systemctl --user disable helm 2>/dev/null || true
+for SVC in helm helm-agent; do
+    if systemctl --user is-active --quiet "$SVC" 2>/dev/null; then
+        systemctl --user stop "$SVC" 2>/dev/null && echo "  stopped $SVC service" || true
+    fi
+    systemctl --user disable "$SVC" 2>/dev/null || true
+done
 
-# 2. Remove systemd unit + reload daemon
-UNIT="$HOME/.config/systemd/user/helm.service"
-if [ -f "$UNIT" ]; then
-    rm -f "$UNIT"
-    systemctl --user daemon-reload
-    echo "  removed $UNIT"
-fi
+# 2. Remove systemd units + reload daemon
+UNIT_DIR="$HOME/.config/systemd/user"
+REMOVED_UNIT=0
+for SVC in helm helm-agent; do
+    UNIT="$UNIT_DIR/$SVC.service"
+    if [ -f "$UNIT" ]; then
+        rm -f "$UNIT"
+        echo "  removed $UNIT"
+        REMOVED_UNIT=1
+    fi
+done
+[ "$REMOVED_UNIT" = "1" ] && systemctl --user daemon-reload
 
-# 3. Remove binary
-BIN="$HOME/.local/bin/helm"
-if [ -f "$BIN" ]; then
-    rm -f "$BIN"
-    echo "  removed $BIN"
-fi
+# 3. Remove binaries (current name + legacy name)
+for BIN in "$HOME/.local/bin/helm" "$HOME/.local/bin/helm-agent"; do
+    if [ -f "$BIN" ]; then
+        rm -f "$BIN"
+        echo "  removed $BIN"
+    fi
+done
 
 # 4. Remove config dir (cert.pem, key.pem, token, agent.toml)
 CONFIG_DIR="$HOME/.config/helm"

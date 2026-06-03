@@ -57,6 +57,39 @@ if [ "$ARCH" = "x86_64" ]; then
   done
 fi
 
+# ── Stop any running instance before replacing the binary ────────────────────
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+echo "==> Stopping existing HELM agent (if running)..."
+for SVC in helm helm-agent; do
+  if systemctl --user is-active --quiet "$SVC" 2>/dev/null; then
+    systemctl --user stop "$SVC" 2>/dev/null && echo "  stopped $SVC" || true
+    systemctl --user disable "$SVC" 2>/dev/null || true
+  fi
+done
+# Kill any orphan not tracked by systemd (stale PID, manual run, etc.)
+# /proc/net/tcp uses little-endian hex port; 0A = TCP_LISTEN
+PORT_HEX=$(printf '%04X' "$PORT")
+INODE=$(awk -v p="$PORT_HEX" 'NR>1 && toupper($2) ~ ":"p"$" && $4=="0A" {print $10}' \
+  /proc/net/tcp /proc/net/tcp6 2>/dev/null | head -1)
+if [ -n "$INODE" ]; then
+  ORPHAN_PID=$(grep -rl "socket:\[$INODE\]" /proc/*/fd 2>/dev/null | head -1 | cut -d/ -f3)
+  if [ -n "$ORPHAN_PID" ]; then
+    echo "  killing orphan pid=$ORPHAN_PID holding port $PORT"
+    kill "$ORPHAN_PID" 2>/dev/null || true
+    sleep 1
+    kill -9 "$ORPHAN_PID" 2>/dev/null || true
+  fi
+fi
+# Remove old service units and binaries so stale artifacts don't linger
+for SVC in helm helm-agent; do
+  UNIT="$HOME/.config/systemd/user/$SVC.service"
+  [ -f "$UNIT" ] && rm -f "$UNIT" && echo "  removed $UNIT"
+done
+for OLD_BIN in "$INSTALL_DIR/helm" "$INSTALL_DIR/helm-agent"; do
+  [ -f "$OLD_BIN" ] && rm -f "$OLD_BIN" && echo "  removed $OLD_BIN"
+done
+
 # ── Write default config (skip if already exists) ─────────────────────────────
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "==> Writing default config..."
@@ -95,12 +128,8 @@ if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
 fi
 
 # ── Systemd user service ──────────────────────────────────────────────────────
-# curl | bash strips D-Bus env vars; restore them so systemctl --user works
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
-
 if command -v systemctl &>/dev/null && systemctl --user daemon-reload &>/dev/null 2>&1; then
-  echo "==> Setting up systemd user service..."
+  echo "==> Installing systemd user service..."
   mkdir -p "$SERVICE_DIR"
   cat > "$SERVICE_DIR/helm.service" <<EOF
 [Unit]
