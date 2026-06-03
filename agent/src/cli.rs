@@ -83,60 +83,122 @@ pub fn cmd_status(cfg: &crate::config::HelmConfig) {
     }
 }
 
-pub fn cmd_stop() -> bool {
+pub fn cmd_stop(port: u16) -> bool {
+    let mut killed = false;
+
     match read_pid() {
         Some(pid) if pid_alive(pid) => {
-            unsafe {
-                libc::kill(pid as libc::pid_t, libc::SIGTERM);
-            }
-            // Wait up to 5 s for the process to exit.
-            for _ in 0..50 {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                if !pid_alive(pid) {
-                    break;
-                }
-            }
-            if pid_alive(pid) {
-                unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL); }
-            }
+            kill_by_pid(pid);
             remove_pid();
             println!("stopped  pid={pid}");
-            true
+            killed = true;
         }
         Some(_) => {
-            println!("not running (stale pid file removed)");
             remove_pid();
-            false
         }
-        None => {
-            println!("not running");
-            false
-        }
+        None => {}
     }
+
+    // Fallback: kill whatever is still holding the port (handles missing/stale
+    // PID file after crashes, suspend-resume, or manual binary invocations).
+    if let Some(pid) = find_pid_by_port(port) {
+        kill_by_pid(pid);
+        if !killed {
+            println!("stopped  pid={pid}  (found by port scan)");
+        }
+        killed = true;
+    }
+
+    if !killed {
+        println!("not running");
+    }
+    killed
 }
 
 /// Kill any running instance before starting a new one. Called at daemon
 /// startup so stale processes (crash, suspend/resume, manual kill) don't block
 /// port binding. Silent — logs via tracing rather than println.
-pub fn kill_stale_instance() {
-    let Some(pid) = read_pid() else { return };
-    if !pid_alive(pid) {
+pub fn kill_stale_instance(port: u16) {
+    // Primary: PID file.
+    if let Some(pid) = read_pid() {
+        if pid_alive(pid) {
+            kill_by_pid(pid);
+        }
         remove_pid();
-        return;
     }
+    // Fallback: if something else is still holding the port (e.g. stale PID
+    // file was already gone), find and kill it via /proc/net/tcp.
+    if let Some(pid) = find_pid_by_port(port) {
+        kill_by_pid(pid);
+    }
+}
+
+/// Send SIGTERM then SIGKILL to `pid`, waiting up to 3 s between them.
+fn kill_by_pid(pid: u32) {
     unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
     for _ in 0..30 {
         std::thread::sleep(std::time::Duration::from_millis(100));
         if !pid_alive(pid) {
-            break;
+            return;
         }
     }
     if pid_alive(pid) {
         unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
-        // Brief wait so the kernel reclaims the port before we bind.
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
-    remove_pid();
+}
+
+/// Scan /proc/net/tcp{,6} for a LISTEN socket on `port` and return the owning PID.
+pub fn find_pid_by_port(port: u16) -> Option<u32> {
+    let target = format!("{:04X}", port);
+    let mut inodes: Vec<u64> = Vec::new();
+
+    for path in &["/proc/net/tcp", "/proc/net/tcp6"] {
+        let Ok(content) = std::fs::read_to_string(path) else { continue };
+        for line in content.lines().skip(1) {
+            let mut fields = line.split_whitespace();
+            let _sl = fields.next()?;
+            let local = fields.next()?;
+            let _rem = fields.next()?;
+            let state = fields.next()?;
+            // skip tx_queue, tr, retrnsmt, uid, timeout
+            for _ in 0..5 { fields.next(); }
+            let inode_str = fields.next()?;
+
+            let port_hex = local.split(':').nth(1)?;
+            // 0A = TCP_LISTEN
+            if port_hex.eq_ignore_ascii_case(&target) && state == "0A" {
+                if let Ok(inode) = inode_str.parse::<u64>() {
+                    inodes.push(inode);
+                }
+            }
+        }
+    }
+
+    if inodes.is_empty() {
+        return None;
+    }
+
+    let procs = std::fs::read_dir("/proc").ok()?;
+    for entry in procs.flatten() {
+        let pid: u32 = entry.file_name().to_string_lossy().parse().ok()?;
+        let fd_dir = entry.path().join("fd");
+        let Ok(fds) = std::fs::read_dir(&fd_dir) else { continue };
+        for fd in fds.flatten() {
+            let Ok(target_link) = std::fs::read_link(fd.path()) else { continue };
+            let s = target_link.to_string_lossy();
+            if let Some(rest) = s.strip_prefix("socket:[") {
+                if let Some(inode_str) = rest.strip_suffix(']') {
+                    if let Ok(inode) = inode_str.parse::<u64>() {
+                        if inodes.contains(&inode) {
+                            return Some(pid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn cmd_qr(cfg: &crate::config::HelmConfig) {

@@ -46,11 +46,11 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         Some(cli::Command::Stop) => {
-            cli::cmd_stop();
+            cli::cmd_stop(cfg.port);
             return Ok(());
         }
         Some(cli::Command::Restart) => {
-            cli::cmd_stop();
+            cli::cmd_stop(cfg.port);
             // Fall through to run.
         }
         Some(cli::Command::Qr) => {
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    cli::kill_stale_instance();
+    cli::kill_stale_instance(cfg.port);
 
     tracing_subscriber::fmt()
         .with_env_filter(
