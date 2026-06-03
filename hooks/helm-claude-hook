@@ -56,7 +56,6 @@ def last_token_usage(lines: list[str]) -> dict:
         try:
             entry = json.loads(line)
             usage = (entry.get("message") or {}).get("usage", {})
-            # Claude Code uses prompt caching — real context size is the sum of all input buckets.
             total = (
                 usage.get("input_tokens", 0)
                 + usage.get("cache_read_input_tokens", 0)
@@ -70,17 +69,13 @@ def last_token_usage(lines: list[str]) -> dict:
 
 
 def _looks_like_noise(text: str) -> bool:
-    """Return True for terminal output, JSON pastes, and other non-prompt content."""
     t = text.strip()
     if not t:
         return True
-    # Watch command output, terminal headers
     if t.startswith("Every ") and "s:" in t[:20]:
         return True
-    # Raw JSON blobs
     if (t.startswith("{") and t.endswith("}")) or (t.startswith("[") and t.endswith("]")):
         return True
-    # Very long multi-line pastes (terminal output)
     if len(t) > 300 and t.count("\n") > 5:
         return True
     return False
@@ -126,7 +121,6 @@ def main() -> None:
 
     state = read_state()
 
-    # Reset session timer when a new session begins.
     if state.get("session_id") != session_id and session_id:
         state["session_id"] = session_id
         state["session_start_ms"] = int(time.time() * 1000)
@@ -162,7 +156,6 @@ def main() -> None:
     try:
         write_state(state)
     except Exception as e:
-        # Never let hook errors surface to Claude Code.
         sys.stderr.write(f"helm-claude-hook: write failed: {e}\n")
 
     sys.exit(0)
