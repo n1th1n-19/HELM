@@ -23,6 +23,11 @@ pub fn run_tray(
     client_count: Arc<AtomicUsize>,
     shutdown_tx: tokio::sync::mpsc::Sender<()>,
 ) -> anyhow::Result<()> {
+    // GTK must be initialised before any tray-icon/menu calls.
+    // Fails cleanly in headless environments — caller logs the error and continues.
+    #[cfg(all(target_os = "linux", feature = "tray"))]
+    gtk::init().map_err(|e| anyhow::anyhow!("GTK init failed (headless or no display): {e}"))?;
+
     let icon = load_icon()?;
 
     let version_item = MenuItem::new(
